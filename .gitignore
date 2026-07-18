@@ -1,0 +1,47 @@
+
+# Rastros de Claude / IA
+.claude/
+CLAUDE.md
+.claude-settings.json
+.claude-settings.local.json
+
+# Dependencias (Node/pnpm)
+node_modules/
+.pnpm-store/
+
+# Builds y Compilación (TypeScript / Core)
+dist/
+build/
+out/
+.tsbuildinfo
+
+# Testing (Vitest)
+coverage/
+
+# Entorno y Secretos
+.env
+.env.*.local
+*.pem
+
+# Logs de ejecución
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Sistema Operativo y Editores
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Icon
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
