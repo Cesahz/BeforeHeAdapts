@@ -9,7 +9,19 @@
 // reimplementa la proyección del núcleo: la delega en `replayFrom` y sus
 // selectores. Si un frame y el motor discrepan, el que está mal es el frame.
 
-import type { ClusterId, EngineEvent, EventLog, PolicyInput } from "@beforeheadapts/core";
+import {
+  confidenceOf,
+  prefix,
+  replayFrom,
+  requiredExposures,
+  resistanceOf,
+  type ClusterId,
+  type ClusterState,
+  type EngineEvent,
+  type EngineState,
+  type EventLog,
+  type PolicyInput,
+} from "@beforeheadapts/core";
 
 /** Lo que se dibuja de un cluster en un instante del replay. */
 export interface ClusterFrame {
@@ -57,6 +69,43 @@ export interface Frame {
  * @param config la misma policy con la que se generó el log; sin ella el replay
  * no es reproducible (ADR 0006 §4, por eso `policyConfig` viaja en la cabecera).
  */
-export function framesFrom(_log: EventLog, _config: PolicyInput = {}): readonly Frame[] {
-  throw new Error("framesFrom: no implementado todavía (Fase 2)");
+export function framesFrom(log: EventLog, config: PolicyInput = {}): readonly Frame[] {
+  return log.events.map((event, i) => {
+    // Cada frame se lee del motor sobre el prefijo correspondiente: el
+    // visualizador no acumula nada por su cuenta.
+    const state = replayFrom(prefix(log, i + 1), config);
+    const clusters: ClusterFrame[] = [];
+
+    // El Map del motor conserva el orden de primera aparición de cada cluster.
+    for (const [clusterId, cluster] of state.clusters) {
+      clusters.push(frameOf(state, clusterId, cluster));
+    }
+
+    return Object.freeze({
+      seq: event.seq,
+      timestamp: event.timestamp,
+      event,
+      clusters: Object.freeze(clusters) as readonly ClusterFrame[],
+    });
+  });
+}
+
+/** Lectura de un cluster del estado del motor. Nada acá recalcula el núcleo. */
+function frameOf(
+  state: EngineState,
+  clusterId: ClusterId,
+  cluster: ClusterState,
+): ClusterFrame {
+  const required = requiredExposures(cluster.signature);
+  return Object.freeze({
+    clusterId,
+    resistance: resistanceOf(state, clusterId),
+    exposureCount: cluster.exposureCount,
+    requiredExposures: required,
+    // Se satura en 1: después del salto el cluster sigue acumulando exposiciones
+    // (un cluster adapta una sola vez), pero el avance ya no significa nada.
+    progress: Math.min(1, cluster.exposureCount / required),
+    adapted: cluster.adapted,
+    confidence: confidenceOf(state, clusterId),
+  });
 }
