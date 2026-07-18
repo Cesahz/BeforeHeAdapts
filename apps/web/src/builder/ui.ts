@@ -21,7 +21,7 @@ import {
 } from "@beforeheadapts/arena-dsl";
 import { requiredExposures } from "@beforeheadapts/core";
 
-import { defaultVisual, makeBuild, type Build, type VisualExpression } from "./build.js";
+import { defaultVisual, makeBuild, withVisual, type Build, type VisualExpression } from "./build.js";
 import { BuildCodeError, decodeBuild, encodeBuild } from "./code.js";
 import { loadBuilds, removeBuild, saveBuilds, upsertBuild, type KeyValueStore } from "./storage.js";
 
@@ -125,10 +125,12 @@ export class Builder {
     guardar.textContent = "Guardar";
     guardar.addEventListener("click", () => {
       const titulo = nombre.value.trim() || "sin nombre";
-      const build: Build = {
-        ...makeBuild(crypto.randomUUID(), titulo, this.#composition),
-        visual: this.#visual,
-      };
+      // `withVisual` normaliza el borde: los deslizadores pueden producir `-0`
+      // y JSON no lo sabe representar (ver `normalizeVisual`).
+      const build: Build = withVisual(
+        makeBuild(crypto.randomUUID(), titulo, this.#composition),
+        this.#visual,
+      );
       this.#builds = upsertBuild(this.#builds, build);
       saveBuilds(this.store, this.#builds);
       nombre.value = "";

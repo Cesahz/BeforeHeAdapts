@@ -9,7 +9,7 @@
 
 import { validate } from "@beforeheadapts/arena-dsl";
 
-import { isBuildShape, type Build } from "./build.js";
+import { isBuildShape, normalizeVisual, type Build } from "./build.js";
 
 /** Falla del import: código corrupto, ajeno o de una versión que no se entiende. */
 export class BuildCodeError extends Error {
@@ -42,7 +42,10 @@ function fromUrlSafe(code: string): string {
  * nombres de build llevan acentos y emoji con toda naturalidad.
  */
 export function encodeBuild(build: Build): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(build));
+  // Se normaliza al salir para que el código emitido y la build en memoria
+  // digan lo mismo: si no, `decode(encode(b))` no sería una identidad.
+  const normalizada: Build = { ...build, visual: normalizeVisual(build.visual) };
+  const bytes = new TextEncoder().encode(JSON.stringify(normalizada));
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return toUrlSafe(btoa(binary));

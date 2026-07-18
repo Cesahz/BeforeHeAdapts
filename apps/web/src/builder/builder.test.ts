@@ -11,7 +11,14 @@ import {
   type Composition,
 } from "@beforeheadapts/arena-dsl";
 
-import { BUILD_VERSION, isBuildShape, makeBuild, type Build, type VisualExpression } from "./build.js";
+import {
+  BUILD_VERSION,
+  isBuildShape,
+  makeBuild,
+  withVisual,
+  type Build,
+  type VisualExpression,
+} from "./build.js";
 import { BuildCodeError, decodeBuild, encodeBuild } from "./code.js";
 import {
   COLLECTION_VERSION,
@@ -90,10 +97,34 @@ describe("código de export/import", () => {
   it("roundtrip: decode(encode(build)) === build", () => {
     fc.assert(
       fc.property(arbComposition, arbVisual, fc.string(), (composition, visual, name) => {
-        const build: Build = { v: BUILD_VERSION, id: "id-1", name, composition, visual };
+        // La build entra por el constructor, que normaliza el borde — igual que
+        // toda build que el sistema produce de verdad. Sobre ESAS el roundtrip
+        // es una identidad exacta.
+        const build = withVisual(
+          { ...makeBuild("id-1", name, composition) },
+          visual,
+        );
         expect(decodeBuild(encodeBuild(build))).toEqual(build);
       }),
     );
+  });
+
+  /**
+   * Regresión de un caso que encontró el property test, no una revisión a ojo.
+   *
+   * `JSON.stringify(-0)` produce `"0"`, así que un `spin: -0` volvía del import
+   * como `+0` y `decode(encode(b))` dejaba de ser una identidad. Se colapsa en
+   * el borde: un giro negativo cero no significa nada distinto de un giro cero.
+   */
+  it("normaliza -0, que JSON no sabe representar", () => {
+    const build = withVisual(makeBuild("i", "n", { element: "ember" }), {
+      hue: 0,
+      trail: -0,
+      spin: -0,
+    });
+
+    expect(Object.is(build.visual.spin, -0)).toBe(false);
+    expect(decodeBuild(encodeBuild(build))).toEqual(build);
   });
 
   it("sobrevive a nombres con acentos y emoji", () => {

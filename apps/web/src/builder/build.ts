@@ -48,9 +48,35 @@ export interface Build {
 
 export const defaultVisual: VisualExpression = Object.freeze({ hue: 190, trail: 0.5, spin: 0 });
 
+/**
+ * Normaliza una expresión visual para que sobreviva al viaje por JSON.
+ *
+ * El único caso que importa hoy es **`-0`**: `JSON.stringify(-0)` produce `"0"`,
+ * así que un `spin: -0` vuelve del código de import como `+0` y el roundtrip
+ * deja de ser una identidad. Un giro negativo cero no significa nada distinto de
+ * un giro cero, así que se colapsan en el borde en vez de arrastrar la
+ * asimetría. Lo encontró un property test, no una revisión a ojo.
+ *
+ * Mismo criterio que `svgNumber` en el visualizador, que normaliza `-0` para
+ * que el SVG sea comparable byte a byte.
+ */
+export function normalizeVisual(visual: VisualExpression): VisualExpression {
+  // `x === 0` es true tanto para `+0` como para `-0`; sumar 0 los colapsa.
+  return {
+    hue: visual.hue === 0 ? 0 : visual.hue,
+    trail: visual.trail === 0 ? 0 : visual.trail,
+    spin: visual.spin === 0 ? 0 : visual.spin,
+  };
+}
+
 /** Build nueva con expresión visual por defecto. */
 export function makeBuild(id: string, name: string, composition: Composition): Build {
   return { v: BUILD_VERSION, id, name, composition, visual: defaultVisual };
+}
+
+/** Build con expresión visual explícita, normalizada en el borde. */
+export function withVisual(build: Build, visual: VisualExpression): Build {
+  return { ...build, visual: normalizeVisual(visual) };
 }
 
 /**
