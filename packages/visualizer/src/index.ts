@@ -9,3 +9,9 @@
 // sabe que existe un visualizador.
 
 export * from "./frames/index.js";
+export * from "./render/index.js";
+
+// El tema se exporta para poder recalibrar la estética sin tocar el render.
+// `svg.ts`, `geometry.ts` y `layout.ts` quedan internos a propósito: son el
+// *cómo* del dibujo, y fijarlos como API pública ataría las manos para cambiarlo.
+export { centerOf, defaultTheme, type Palette, type Theme } from "./render/theme.js";

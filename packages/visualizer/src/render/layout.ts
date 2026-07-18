@@ -11,7 +11,7 @@
 
 import { requiredExposures, sim, type ClusterId } from "@beforeheadapts/core";
 import type { ClusterFrame, Frame } from "../frames/index.js";
-import { polar, type Point } from "./geometry.js";
+import { hashString, polar, type Point } from "./geometry.js";
 import { centerOf, type Theme } from "./theme.js";
 
 const TAU = Math.PI * 2;
@@ -60,6 +60,22 @@ export function layoutOf(frame: Frame, theme: Theme): Layout {
     threads: threadsOf(frame.clusters, nodes, theme),
     coreVertices: theme.baseVertices + frame.clusters.filter((c) => c.adapted).length,
   });
+}
+
+/**
+ * Rumbo desde el que ataca una firma, en radianes.
+ *
+ * Se deriva del `clusterId`, no de la posición del nodo, por una razón de
+ * orden de eventos: `ResistanceApplied` se emite **antes** que
+ * `ExposureRecorded`, así que en el primer golpe de una firma nueva el cluster
+ * todavía no existe en el layout y no habría nodo del cual salir.
+ *
+ * El efecto secundario es bueno: cada firma llega siempre desde la misma
+ * dirección, así que el patrón de ataque se vuelve legible a lo largo del
+ * replay en vez de parecer ruido.
+ */
+export function bearingOf(clusterId: ClusterId): number {
+  return (hashString(clusterId) / 0x100000000) * TAU;
 }
 
 function nodeOf(

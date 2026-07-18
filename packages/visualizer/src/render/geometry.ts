@@ -104,6 +104,21 @@ export function jitter(seed: number, index: number): number {
 }
 
 /**
+ * Hash determinista de un string a un entero de 32 bits sin signo.
+ *
+ * Lo usa el layout para darle a cada firma un rumbo fijo de ataque. Que sea
+ * estable importa: la misma firma tiene que llegar siempre desde la misma
+ * dirección, si no el replay se ve como ruido en vez de como un patrón.
+ */
+export function hashString(value: string): number {
+  let h = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    h = Math.imul(h, 31) + value.charCodeAt(i);
+  }
+  return mix(h);
+}
+
+/**
  * Escala del ente `age` frames después de una exposición: se contrae de golpe y
  * recupera. `1 - peak` en `age = 0`, de vuelta en `1` desde `age >= span`.
  */

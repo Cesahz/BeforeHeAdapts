@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
   contractionScale,
+  hashString,
   jitter,
   polar,
   regularPolygon,
@@ -177,6 +178,34 @@ describe("jitter — vibración determinista", () => {
   it("no devuelve el mismo valor para todas las semillas de un vértice", () => {
     const valores = new Set(Array.from({ length: 16 }, (_, s) => jitter(s, 0)));
     expect(valores.size).toBeGreaterThan(8);
+  });
+});
+
+describe("hashString — rumbo estable por firma", () => {
+  it("da siempre el mismo valor para el mismo string", () => {
+    fc.assert(
+      fc.property(fc.string(), (s) => {
+        expect(hashString(s)).toBe(hashString(s));
+      }),
+    );
+  });
+
+  it("devuelve un entero de 32 bits sin signo", () => {
+    fc.assert(
+      fc.property(fc.string(), (s) => {
+        const h = hashString(s);
+        expect(Number.isInteger(h)).toBe(true);
+        expect(h).toBeGreaterThanOrEqual(0);
+        expect(h).toBeLessThanOrEqual(0xffffffff);
+      }),
+    );
+  });
+
+  // Los clusterId reales son firmas canónicas: comparten prefijos y separadores.
+  // Si el hash los mapeara juntos, firmas distintas atacarían desde el mismo lado.
+  it("separa strings parecidos", () => {
+    const ids = ["fuego", "fuego|hielo", "fuego|rayo", "hielo", "hielo|fuego"];
+    expect(new Set(ids.map(hashString)).size).toBe(ids.length);
   });
 });
 
