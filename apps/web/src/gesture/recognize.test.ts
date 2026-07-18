@@ -15,10 +15,10 @@ import {
   compositionFor,
   metricsOf,
   recognize,
-  resample,
   type GestureKind,
   type GesturePoint,
 } from "./recognize.js";
+import { resample } from "./trace.js";
 
 // --- Generadores de trazos sintéticos ---------------------------------------
 

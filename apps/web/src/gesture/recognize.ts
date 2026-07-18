@@ -28,13 +28,17 @@
 import type { Composition, Element } from "@beforeheadapts/arena-dsl";
 
 import { GESTURE } from "../arena/balance.js";
+import {
+  distance,
+  extentOf,
+  pathLength,
+  resample,
+  signedTurns,
+  type TracePoint,
+} from "./trace.js";
 
 /** Una muestra del trazo. `t` en milisegundos monótonos. */
-export interface GesturePoint {
-  readonly x: number;
-  readonly y: number;
-  readonly t: number;
-}
+export type GesturePoint = TracePoint;
 
 /** Los cuatro gestos del catálogo mínimo viable (ADR 0009 §1). */
 export type GestureKind = "straight" | "hold" | "circle" | "zigzag";
@@ -75,82 +79,6 @@ export interface TraceMetrics {
   readonly reversals: number;
 }
 
-const TAU = Math.PI * 2;
-
-function distance(a: GesturePoint, b: GesturePoint): number {
-  return Math.hypot(b.x - a.x, b.y - a.y);
-}
-
-function pathLength(points: readonly GesturePoint[]): number {
-  let total = 0;
-  for (let i = 1; i < points.length; i += 1) total += distance(points[i - 1]!, points[i]!);
-  return total;
-}
-
-/**
- * Re-muestrea el trazo a `count` puntos equidistantes **por longitud de arco**.
- *
- * Es el paso que compra la invariancia: después de esto, un círculo dibujado
- * lento y grande y otro rápido y chico producen la misma secuencia de ángulos.
- * (Misma idea que el reconocedor $1, sin su plantilla ni su rotación.)
- */
-export function resample(points: readonly GesturePoint[], count: number): readonly GesturePoint[] {
-  const total = pathLength(points);
-  if (total === 0 || count < 2) return points;
-
-  const step = total / (count - 1);
-  const out: GesturePoint[] = [points[0]!];
-  let carried = 0;
-
-  for (let i = 1; i < points.length; i += 1) {
-    const from = points[i - 1]!;
-    const to = points[i]!;
-    let segment = distance(from, to);
-    if (segment === 0) continue;
-
-    // Un segmento largo puede contener varios puntos re-muestreados, de ahí el
-    // while: se va cortando el segmento hasta que lo que sobra no llega al paso.
-    let cursor = from;
-    while (carried + segment >= step && out.length < count - 1) {
-      const remaining = step - carried;
-      const ratio = remaining / segment;
-      cursor = {
-        x: cursor.x + (to.x - cursor.x) * ratio,
-        y: cursor.y + (to.y - cursor.y) * ratio,
-        t: cursor.t + (to.t - cursor.t) * ratio,
-      };
-      out.push(cursor);
-      segment -= remaining;
-      carried = 0;
-    }
-    carried += segment;
-  }
-
-  // El último punto se fija explícitamente: acumular flotantes puede dejar el
-  // arreglo un punto corto, y el cierre del trazo es justo lo que mide `circle`.
-  while (out.length < count) out.push(points[points.length - 1]!);
-  return out;
-}
-
-/** Diferencia angular entre segmentos consecutivos, normalizada a (−π, π]. */
-function signedTurns(points: readonly GesturePoint[]): readonly number[] {
-  const turns: number[] = [];
-  for (let i = 2; i < points.length; i += 1) {
-    const a = points[i - 2]!;
-    const b = points[i - 1]!;
-    const c = points[i]!;
-    const previous = Math.atan2(b.y - a.y, b.x - a.x);
-    const current = Math.atan2(c.y - b.y, c.x - b.x);
-    let delta = current - previous;
-    // Normalizar a (−π, π]: sin esto, cruzar el corte de `atan2` se lee como un
-    // giro de casi una vuelta entera y un trazo recto parecería un círculo.
-    while (delta > Math.PI) delta -= TAU;
-    while (delta <= -Math.PI) delta += TAU;
-    turns.push(delta);
-  }
-  return turns;
-}
-
 /** Calcula las medidas del trazo. Puro; no decide nada. */
 export function metricsOf(points: readonly GesturePoint[]): TraceMetrics {
   const first = points[0]!;
@@ -187,20 +115,9 @@ export function metricsOf(points: readonly GesturePoint[]): TraceMetrics {
     lastSign = sign;
   }
 
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
-  }
-
   return {
     path,
-    extent: Math.hypot(maxX - minX, maxY - minY),
+    extent: extentOf(points),
     duration,
     directness: path === 0 ? 0 : distance(first, last) / path,
     speed: duration <= 0 ? 0 : path / duration,

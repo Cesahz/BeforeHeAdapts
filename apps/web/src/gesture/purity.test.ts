@@ -68,8 +68,12 @@ describe("pureza del reconocedor de gestos", () => {
   });
 
   it.each([
-    ["document", /\bdocument\s*\./],
-    ["window", /\bwindow\s*\./],
+    ["document", /(?<![.#\w])document\s*\./],
+    // El lookbehind no es paranoia: `noise.ts` tiene un campo `#window` y un
+    // getter `this.#window`, y un patrón ingenuo `\bwindow\.` los confundía con
+    // el global del navegador. La guardia tiene que distinguir el objeto del
+    // entorno de una propiedad que se llama igual.
+    ["window", /(?<![.#\w])window\s*\./],
     ["localStorage", /\blocalStorage\b/],
     ["addEventListener", /\baddEventListener\b/],
     ["PointerEvent", /\bPointerEvent\b/],
@@ -78,10 +82,12 @@ describe("pureza del reconocedor de gestos", () => {
     for (const file of VIGILADOS) expect(codeOf(file)).not.toMatch(patron);
   });
 
-  it("el reconocedor recibe el tiempo como dato y no lo lee del entorno", () => {
+  it("el tiempo entra como dato y no se lee del entorno", () => {
     // La contracara positiva de la guardia: que no lea el reloj es la mitad;
     // la otra mitad es que el tiempo SÍ entre, porque dos de los cuatro gestos
-    // (`hold` y `straight`) son distinciones temporales.
-    expect(codeOf("gesture/recognize.ts")).toMatch(/readonly t:\s*number/);
+    // (`hold` y `straight`) son distinciones temporales y el rate-limit del
+    // ruido también.
+    expect(codeOf("gesture/trace.ts")).toMatch(/readonly t:\s*number/);
+    expect(codeOf("gesture/noise.ts")).toMatch(/now:\s*number/);
   });
 });
