@@ -6,139 +6,37 @@ import fc from "fast-check";
 //
 // Spec canónica: docs/contrato.md. Este archivo ES la forma ejecutable.
 //
-// Fase 0: NO hay implementación. Los tipos de abajo son la especificación de la
-// superficie del núcleo; la conducta se referencia vía placeholders que lanzan
-// `Error(NOT_IMPLEMENTED)`. Por eso TODOS los tests deben estar en ROJO: ese
-// rojo es el hito de la Fase 0. En la Fase 1 se reconectan estos placeholders a
-// los módulos reales (signature/ ledger/ policy/ engine/) y se implementa hasta
-// ponerlos en verde. Prohibido debilitar un test del contrato para pasarlo.
+// Fase 1: los placeholders de la Fase 0 quedaron reconectados a los módulos
+// reales (signature/ ledger/ policy/ engine/). Los cuerpos de los tests NO se
+// tocaron en la reconexión: son los mismos que se escribieron en rojo antes de
+// existir la implementación. Prohibido debilitar un test del contrato para
+// pasarlo; si el código y el contrato chocan, se discute con el autor.
 // ============================================================================
 
-// --- Tipos del dominio del núcleo (especificación) --------------------------
+import {
+  canonicalize,
+  requiredExposures,
+  type Primitive,
+  type StimulusSignature,
+} from "./signature/index.js";
+import type { CounterReady, EngineEvent } from "./ledger/index.js";
+import type { PolicyInput } from "./policy/index.js";
+import {
+  clusterIdOf,
+  confidenceOf,
+  createInitialState,
+  effectiveness,
+  generalizedInitialResistance,
+  process,
+  resistanceOf,
+  type EngineState,
+} from "./engine/index.js";
 
-type Primitive = string;
-
-interface StimulusSignature {
-  readonly primitives: readonly Primitive[];
-  readonly intensity: number;
-}
-
-type ClusterId = string;
-
-interface Weakness {
-  readonly dimension: Primitive;
-}
-
-type MemoryPolicy = "permanente" | "por-sesion" | "decaimiento";
-
-interface PolicyConfig {
-  readonly memory: MemoryPolicy;
-  readonly curve: { readonly base: number; readonly r: number; readonly asymptote: number };
-  readonly generalizationRadius: number;
-}
-
-interface ExposureRecorded {
-  readonly type: "ExposureRecorded";
-  readonly v: number;
-  readonly clusterId: ClusterId;
-  readonly signature: StimulusSignature;
-  readonly exposureCount: number;
-}
-interface AdaptationProgressed {
-  readonly type: "AdaptationProgressed";
-  readonly v: number;
-  readonly clusterId: ClusterId;
-  readonly progress: number;
-}
-interface AdaptationCompleted {
-  readonly type: "AdaptationCompleted";
-  readonly v: number;
-  readonly clusterId: ClusterId;
-  readonly weakness: Weakness;
-}
-interface CounterReady {
-  readonly type: "CounterReady";
-  readonly v: number;
-  readonly clusterId: ClusterId;
-  readonly weakness: Weakness;
-}
-interface ResistanceApplied {
-  readonly type: "ResistanceApplied";
-  readonly v: number;
-  readonly signature: StimulusSignature;
-  readonly effApplied: number;
-  readonly k: number;
-}
-
-type EngineEvent =
-  | ExposureRecorded
-  | AdaptationProgressed
-  | AdaptationCompleted
-  | CounterReady
-  | ResistanceApplied;
-
-// Estado opaco: el test nunca inspecciona su interior, solo lo pasa y lee vía selectores.
-interface EngineState {
-  readonly __brand: "EngineState";
-}
-
-interface ProcessResult {
-  readonly state: EngineState;
-  readonly events: readonly EngineEvent[];
-}
-
-// --- Superficie del núcleo (placeholders — Fase 1 la implementa) ------------
-
-const NOT_IMPLEMENTED = "motor no implementado — Fase 1";
-function notImplemented(): never {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-/** Estado inicial de una sala/ente para una configuración de política dada. */
-function createInitialState(_config: PolicyConfig): EngineState {
-  return notImplemented();
-}
-
-/** Función pura del contrato: (estado, estímulo, tiempo) → (estado', eventos[]). */
-function process(_state: EngineState, _signature: StimulusSignature, _timestamp: number): ProcessResult {
-  return notImplemented();
-}
-
-/** Resistencia adaptada actual contra un cluster (magnitud escalonada — R1). */
-function resistanceOf(_state: EngineState, _clusterId: ClusterId): number {
-  return notImplemented();
-}
-
-/** Efectividad `eff(k)` de la PRÓXIMA exposición de esa firma (curva — R5). */
-function effectiveness(_state: EngineState, _signature: StimulusSignature): number {
-  return notImplemented();
-}
-
-/** Confianza de la generalización sobre un cluster (decae en política "decaimiento" — R4). */
-function confidenceOf(_state: EngineState, _clusterId: ClusterId): number {
-  return notImplemented();
-}
-
-/** `N(c)`: exposiciones requeridas para completar la adaptación a esa firma (R2). */
-function requiredExposures(_signature: StimulusSignature): number {
-  return notImplemented();
-}
-
-/** Cluster canónico al que mapea una firma en un estado dado. */
-function clusterIdOf(_state: EngineState, _signature: StimulusSignature): ClusterId {
-  return notImplemented();
-}
-
-/** `R₀(s) = max_c [sim(s,c) × transfer(c)]`: resistencia heredada por generalización (R6). */
-function generalizedInitialResistance(_state: EngineState, _signature: StimulusSignature): number {
-  return notImplemented();
-}
-
-// --- Helpers de test (lógica real; nunca se ejecuta porque los placeholders lanzan antes) ---
+// --- Helpers de test --------------------------------------------------------
 
 /** Construye una firma canónica (primitivas ordenadas para independencia del orden). */
 function sig(primitives: readonly Primitive[], intensity = 1): StimulusSignature {
-  return { primitives: [...primitives].sort(), intensity };
+  return canonicalize(primitives, intensity);
 }
 
 interface Run {
@@ -148,7 +46,7 @@ interface Run {
 }
 
 /** Corre `n` exposiciones de la misma firma y devuelve estados + eventos. */
-function run(config: PolicyConfig, signature: StimulusSignature, n: number): Run {
+function run(config: PolicyInput, signature: StimulusSignature, n: number): Run {
   const states: EngineState[] = [createInitialState(config)];
   const events: EngineEvent[] = [];
   const perStep: EngineEvent[][] = [];
@@ -168,7 +66,7 @@ function isStrictlyDecreasing(xs: readonly number[]): boolean {
   return xs.every((x, i) => i === 0 || x < xs[i - 1]!);
 }
 
-const defaultConfig: PolicyConfig = {
+const defaultConfig: PolicyInput = {
   memory: "permanente",
   curve: { base: 1, r: 0.5, asymptote: 0.05 },
   generalizationRadius: 0.5,
