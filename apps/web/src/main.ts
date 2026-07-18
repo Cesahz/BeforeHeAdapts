@@ -4,16 +4,16 @@
 // motor, así que un framework reactivo introduciría una segunda fuente de verdad
 // para el mismo estado — justo lo que la Ley de arquitectura prohíbe. Acá se
 // renderiza leyendo la sala, nunca acumulando estado propio en la UI.
-//
-// La vista del ente (frames + SVG del visualizador) todavía no está enganchada:
-// esto es el loop de sala y el export, y se reemplaza en el paso siguiente.
 
 import { cooldownOf, costOf } from "@beforeheadapts/arena-dsl";
+
+import "./style.css";
 
 import { downloadText } from "./arena/download.js";
 import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
+import { LiveView } from "./view/live.js";
 
 const root = document.querySelector<HTMLDivElement>("#arena");
 if (root === null) throw new Error("falta el contenedor #arena");
@@ -23,82 +23,113 @@ const room = new Room("sala-local");
 /** Reloj de la sala. Monótono y en milisegundos, como exige el ledger. */
 const now = (): number => Math.round(performance.now());
 
+// --- Estructura de la página, montada una sola vez ---------------------------
+// El DOM se construye acá y después solo se ACTUALIZA. Reconstruirlo por cuadro
+// mataría el foco, el hover y cualquier animación del SVG.
+
+const escena = document.createElement("div");
+escena.className = "escena";
+// El pipeline del visualizador emite un frame POR EVENTO, así que con el log
+// vacío no hay nada que dibujar y el ente recién aparece con el primer golpe.
+// Se avisa en vez de dejar un hueco negro sin explicación.
+escena.innerHTML = `<p class="vacio">el ente todavía no fue expuesto a nada — atacá para despertarlo</p>`;
+
+const panel = document.createElement("div");
+panel.className = "panel";
+
+const botonera = document.createElement("div");
+botonera.className = "botonera";
+
+const estado = document.createElement("p");
+estado.className = "estado";
+
+const medidor = document.createElement("p");
+medidor.className = "medidor";
+
+const exportarBoton = document.createElement("button");
+exportarBoton.textContent = "Exportar replay";
+
+const bitacoraLista = document.createElement("ul");
+bitacoraLista.className = "bitacora";
+
+panel.append(botonera, estado, medidor, exportarBoton, bitacoraLista);
+root.append(escena, panel);
+
+const view = new LiveView(escena);
+
+// --- Botones de ataque -------------------------------------------------------
+
+const botones = PREFABS.map((prefab) => {
+  const boton = document.createElement("button");
+  boton.title = prefab.note;
+  boton.addEventListener("click", () => lanzar(prefab));
+  botonera.append(boton);
+  return { prefab, boton };
+});
+
 const bitacora: string[] = [];
 
 function log(line: string): void {
   bitacora.unshift(line);
-  if (bitacora.length > 12) bitacora.pop();
+  if (bitacora.length > 8) bitacora.pop();
+  bitacoraLista.replaceChildren(
+    ...bitacora.map((linea) => {
+      const item = document.createElement("li");
+      item.textContent = linea;
+      return item;
+    }),
+  );
 }
 
 function lanzar(prefab: Prefab): void {
   try {
     const outcome = room.attack(prefab.composition, now());
-    const adaptado = outcome.adapted ? " · ADAPTADO" : "";
     log(
       `${prefab.name} — daño ${outcome.damage.toFixed(2)} · ` +
         `eff ${outcome.effApplied.toFixed(3)} · ` +
-        `${outcome.exposures}/${outcome.requiredExposures} exposiciones${adaptado}`,
+        `${outcome.exposures}/${outcome.requiredExposures}` +
+        (outcome.adapted ? " · ADAPTADO" : ""),
     );
+    // El log creció: los frames se recalculan ACÁ, no por cuadro.
+    view.sync(room.log);
   } catch (error) {
     if (error instanceof CooldownError) {
-      const resta = ((error.readyAt - now()) / 1000).toFixed(1);
-      log(`${prefab.name} — en cooldown, faltan ${resta} s`);
+      log(`${prefab.name} — en cooldown, faltan ${((error.readyAt - now()) / 1000).toFixed(1)} s`);
     } else {
       throw error;
     }
   }
-  render();
 }
 
-function exportar(): void {
+exportarBoton.addEventListener("click", () => {
   downloadText(replayFileName(room), serializeReplay(room));
   log(`replay exportado (${room.log.events.length} eventos)`);
-  render();
-}
+});
 
-function render(): void {
-  root!.replaceChildren();
+// --- Bucle de animación ------------------------------------------------------
 
-  const titulo = document.createElement("h1");
-  titulo.textContent = "Arena";
-  root!.append(titulo);
+function frame(): void {
+  const t = now();
 
-  const botones = document.createElement("div");
-  for (const prefab of PREFABS) {
-    const boton = document.createElement("button");
-    const disponible = room.canAttack(prefab.composition, now());
-    boton.textContent =
-      `${prefab.name} (costo ${costOf(prefab.composition)}, ` +
-      `cd ${(cooldownOf(prefab.composition) / 1000).toFixed(1)}s)`;
-    boton.title = prefab.note;
+  view.tick(t);
+
+  for (const { prefab, boton } of botones) {
+    const disponible = room.canAttack(prefab.composition, t);
     boton.disabled = !disponible;
-    boton.addEventListener("click", () => lanzar(prefab));
-    botones.append(boton);
+    const restante = room.readyAt(prefab.composition) - t;
+    boton.textContent = disponible
+      ? `${prefab.name} · costo ${costOf(prefab.composition)}`
+      : `${prefab.name} · ${(restante / 1000).toFixed(1)}s`;
   }
-  root!.append(botones);
 
-  const estado = document.createElement("p");
   estado.textContent =
-    `${room.state.clusters.size} clusters conocidos · ` +
-    `${room.log.events.length} eventos en el log`;
-  root!.append(estado);
+    `${room.state.clusters.size} clusters · ${room.log.events.length} eventos · ` +
+    `cooldown máximo ${(Math.max(...PREFABS.map((p) => cooldownOf(p.composition))) / 1000).toFixed(1)}s`;
 
-  const exportarBoton = document.createElement("button");
-  exportarBoton.textContent = "Exportar replay";
-  exportarBoton.disabled = room.log.events.length === 0;
-  exportarBoton.addEventListener("click", exportar);
-  root!.append(exportarBoton);
+  const { fps, lastSyncMs } = view.stats;
+  medidor.textContent = `${fps.toFixed(0)} fps · último sync ${lastSyncMs.toFixed(1)} ms`;
 
-  const lista = document.createElement("ul");
-  for (const linea of bitacora) {
-    const item = document.createElement("li");
-    item.textContent = linea;
-    lista.append(item);
-  }
-  root!.append(lista);
+  requestAnimationFrame(frame);
 }
 
-render();
-// Los botones se rehabilitan solos cuando vence un cooldown; sin este tick la UI
-// quedaría mintiendo hasta el próximo clic.
-setInterval(render, 250);
+requestAnimationFrame(frame);

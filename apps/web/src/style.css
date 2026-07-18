@@ -1,0 +1,98 @@
+/* Estética fría y abstracta (§4 del diseño): geometría, no ilustración.
+   El CSS solo viste la UI. El juego se dibuja en el SVG del visualizador. */
+
+:root {
+  --fondo: #05070a;
+  --tinta: #7fd4e8;
+  --tenue: #4a6c7a;
+  --asimilado: #e8a33d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+#arena {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: start;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+@media (max-width: 720px) {
+  #arena {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.escena svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.botonera {
+  display: grid;
+  gap: 6px;
+}
+
+button {
+  font: inherit;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--tinta);
+  background: transparent;
+  border: 1px solid var(--tenue);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--tinta);
+}
+
+button:disabled {
+  color: var(--tenue);
+  border-color: #1e2b31;
+  cursor: default;
+}
+
+.estado,
+.medidor {
+  color: var(--tenue);
+  margin: 12px 0 0;
+}
+
+.bitacora {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  color: var(--tenue);
+}
+
+.bitacora li {
+  padding: 3px 0;
+  border-bottom: 1px solid #10191d;
+  word-break: break-word;
+}
+
+/* La adaptación es el único evento que grita. */
+.bitacora li:first-child {
+  color: var(--tinta);
+}
+
+.vacio {
+  color: var(--tenue);
+  padding: 80px 20px;
+  text-align: center;
+  border: 1px dashed #1e2b31;
+}
