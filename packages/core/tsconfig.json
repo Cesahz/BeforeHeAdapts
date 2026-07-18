@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // `composite` habilita que otros paquetes del workspace referencien al
+    // núcleo por project reference (packages/visualizer), en vez de recompilarlo
+    // dentro de su propio programa.
+    "composite": true,
     "rootDir": "./src",
     "outDir": "./dist",
     "tsBuildInfoFile": "./dist/.tsbuildinfo",

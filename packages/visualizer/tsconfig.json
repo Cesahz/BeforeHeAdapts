@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "types": []
+  },
+  // El núcleo entra por project reference: se tipa contra sus declaraciones
+  // publicadas, no recompilando su código dentro de este programa. Vitest, en
+  // cambio, resuelve `@beforeheadapts/core` por fuente (ver `vitest.config.ts`)
+  // para no exigir un build previo al correr los tests.
+  "references": [{ "path": "../core" }],
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules", "**/*.test.ts"]
+}
