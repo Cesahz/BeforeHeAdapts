@@ -100,6 +100,26 @@ export class Room {
     if (now < readyAt) throw new CooldownError(readyAt);
 
     const signature = toSignature(composition);
+    const nextReadyAt = now + cooldownOf(composition);
+    this.#readyAt.set(clusterKeyOf(signature), nextReadyAt);
+
+    return { ...this.expose(signature, now), composition, readyAt: nextReadyAt };
+  }
+
+  /**
+   * Expone al ente a una firma cruda, sin cooldown ni composición detrás.
+   *
+   * Existe para el **ruido ambiental** (ADR 0009 §2), que no es una composición
+   * del Builder sino lo que el ente percibe del movimiento involuntario del
+   * jugador. La sala se mantiene neutral respecto de qué significa la firma: su
+   * rate-limit lo gobierna quien la emite (`NoiseWatcher`), no la sala.
+   *
+   * `attack()` está implementado sobre esto: un ataque es una exposición más un
+   * cooldown. Que compartan camino no es ahorro de líneas — es lo que garantiza
+   * que el ruido entre al log por la misma puerta y con la misma forma que
+   * cualquier golpe.
+   */
+  expose(signature: StimulusSignature, now: number): Omit<AttackOutcome, "composition" | "readyAt"> {
     const clusterId = clusterKeyOf(signature);
 
     // R6 se lee antes de exponer: es lo que la firma hereda de lo ya adaptado.
@@ -108,15 +128,11 @@ export class Room {
     const result = expose(this.#state, signature, now);
     this.#state = result.state;
 
-    const nextReadyAt = now + cooldownOf(composition);
-    this.#readyAt.set(clusterId, nextReadyAt);
-
     const applied = result.events.find((e) => e.type === "ResistanceApplied");
     const effApplied = applied?.type === "ResistanceApplied" ? applied.effApplied : 0;
     const cluster = this.#state.clusters.get(clusterId);
 
     return {
-      composition,
       signature,
       events: result.events,
       effApplied,
@@ -125,7 +141,6 @@ export class Room {
       exposures: cluster?.exposureCount ?? 0,
       requiredExposures: requiredExposures(signature),
       adapted: resistanceOf(this.#state, clusterId) > 0,
-      readyAt: nextReadyAt,
     };
   }
 }
