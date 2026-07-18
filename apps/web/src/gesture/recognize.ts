@@ -134,36 +134,51 @@ export function metricsOf(points: readonly GesturePoint[]): TraceMetrics {
  * disjuntos por umbrales— pero sí decide qué motivo de rechazo se reporta.
  */
 export function recognize(points: readonly GesturePoint[]): Recognition {
-  if (points.length < GESTURE.minPoints) return { ok: false, reason: "insuficiente" };
+  if (points.length < 2) return { ok: false, reason: "insuficiente" };
 
   const m = metricsOf(points);
   if (m.duration <= 0) return { ok: false, reason: "insuficiente" };
 
-  // `hold` primero: es la ausencia de trazo, así que no tiene sentido medirle
-  // ángulos a lo que apenas se movió.
+  // `hold` PRIMERO, y antes del mínimo de muestras.
+  //
+  // Se define por tiempo y quietud, no por cantidad de puntos: un puntero que
+  // no se mueve no genera eventos `pointermove`, así que un hold real puede
+  // llegar acá con dos muestras. Exigirle `minPoints` volvía imposible el único
+  // gesto cuya esencia es la ausencia de trazo — y así estuvo, sin reconocerse
+  // una sola vez, hasta que el autor lo probó a mano.
+  //
+  // No hace falta el mínimo como salvaguarda: `holdMinMs` ya descarta el clic
+  // accidental, que es de lo único que protegía acá.
   if (m.path < GESTURE.holdMaxPathPx) {
     return m.duration >= GESTURE.holdMinMs
       ? { ok: true, kind: "hold" }
       : { ok: false, reason: "insuficiente" };
   }
 
+  // Los gestos de TRAZO sí necesitan muestras: sin suficientes puntos no hay
+  // curvatura que medir y clasificar sería adivinar.
+  if (points.length < GESTURE.minPoints) return { ok: false, reason: "insuficiente" };
   if (m.path < GESTURE.minPathPx) return { ok: false, reason: "insuficiente" };
+
+  // `zigzag` ANTES que `circle`. Los dos son disjuntos por `reversals`, así que
+  // el orden no cambia el resultado — pero deja explícito cuál es el gesto
+  // específico y cuál el general: un zigzag dibujado en arco tiene giro
+  // acumulado de círculo, y lo que lo delata son los cambios de sentido.
+  if (
+    m.extent >= GESTURE.zigzagMinExtentPx &&
+    m.absTurn >= GESTURE.zigzagMinAbsTurn &&
+    m.reversals >= GESTURE.zigzagMinReversals
+  ) {
+    return { ok: true, kind: "zigzag" };
+  }
 
   if (
     m.extent >= GESTURE.circleMinExtentPx &&
     m.netTurn >= GESTURE.circleMinNetTurn &&
+    m.reversals <= GESTURE.circleMaxReversals &&
     m.directness <= GESTURE.circleMaxClosure
   ) {
     return { ok: true, kind: "circle" };
-  }
-
-  if (
-    m.extent >= GESTURE.zigzagMinExtentPx &&
-    m.absTurn >= GESTURE.zigzagMinAbsTurn &&
-    m.netTurn <= GESTURE.zigzagMaxNetTurn &&
-    m.reversals >= GESTURE.zigzagMinReversals
-  ) {
-    return { ok: true, kind: "zigzag" };
   }
 
   if (m.directness >= GESTURE.straightMinRatio) {

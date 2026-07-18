@@ -29,6 +29,12 @@ export interface PointerHandlers {
 const MAX_STROKE_POINTS = 600;
 
 /**
+ * Paso del latido de muestreo, en ms. Igual al decimado del ruido: es el mismo
+ * criterio (una muestra por paso fijo, independiente del dispositivo).
+ */
+const HEARTBEAT_MS = 16;
+
+/**
  * Engancha el muestreo a un elemento.
  *
  * @param clock inyectado en vez de leer `performance.now()` adentro: mantiene
@@ -43,6 +49,34 @@ export function attachPointer(
   handlers: PointerHandlers,
 ): () => void {
   let stroke: GesturePoint[] | undefined;
+  let last: { x: number; y: number } | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Late una muestra por paso aunque el puntero esté quieto.
+   *
+   * `pointermove` solo dispara cuando hay movimiento, así que un trazo definido
+   * por NO moverse —`hold`— llegaba al reconocedor con dos puntos y se
+   * rechazaba siempre. El muestreo tiene que ser por TIEMPO y no solo por
+   * evento; si no, el gesto que mide quietud es justamente el que no se puede
+   * medir.
+   *
+   * De paso empareja el muestreo de los trazos lentos, donde el navegador
+   * entrega puntos muy espaciados.
+   */
+  const startHeartbeat = (): void => {
+    stopHeartbeat();
+    heartbeat = setInterval(() => {
+      if (stroke === undefined || last === undefined) return;
+      if (stroke.length >= MAX_STROKE_POINTS) return;
+      stroke.push({ x: last.x, y: last.y, t: clock() });
+    }, HEARTBEAT_MS);
+  };
+
+  const stopHeartbeat = (): void => {
+    if (heartbeat !== undefined) clearInterval(heartbeat);
+    heartbeat = undefined;
+  };
 
   const positionOf = (event: PointerEvent): { x: number; y: number } => {
     // Coordenadas relativas al contenedor: el gesto no puede depender de dónde
@@ -55,6 +89,8 @@ export function attachPointer(
     const now = clock();
     const { x, y } = positionOf(event);
     stroke = [{ x, y, t: now }];
+    last = { x, y };
+    startHeartbeat();
     // Capturar el puntero hace que soltar el botón FUERA del contenedor igual
     // cierre el trazo acá. Sin esto, un gesto que se sale del área queda
     // colgado y el siguiente arranca con puntos viejos pegados adelante.
@@ -65,6 +101,7 @@ export function attachPointer(
     const now = clock();
     const { x, y } = positionOf(event);
     handlers.onMove(x, y, now);
+    last = { x, y };
     if (stroke !== undefined && stroke.length < MAX_STROKE_POINTS) {
       stroke.push({ x, y, t: now });
     }
@@ -72,6 +109,7 @@ export function attachPointer(
 
   const finish = (event: PointerEvent): void => {
     if (stroke === undefined) return;
+    stopHeartbeat();
     const now = clock();
     const { x, y } = positionOf(event);
     stroke.push({ x, y, t: now });
@@ -90,6 +128,7 @@ export function attachPointer(
   element.addEventListener("pointercancel", finish);
 
   return () => {
+    stopHeartbeat();
     element.removeEventListener("pointerdown", onPointerDown);
     element.removeEventListener("pointermove", onPointerMove);
     element.removeEventListener("pointerup", finish);

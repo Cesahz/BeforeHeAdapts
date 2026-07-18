@@ -116,14 +116,17 @@ export const GESTURE = tuning({
   zigzagMinAbsTurn: 4.0,
 
   /**
-   * `zigzag`: giro con SIGNO máximo. Lo que separa zigzag de círculo: en el
-   * zigzag los giros se cancelan. Rango sano: 2,5–3,5.
+   * `circle`: cambios de sentido MÁXIMOS. Un círculo gira siempre para el mismo
+   * lado. Rango sano: 0–2.
    *
-   * No puede bajar mucho de π: con un número impar de picos queda un giro sin
-   * cancelar, y un giro suelto vale hasta media vuelta. Con 2,0 una sierra
-   * legítima se rechazaba por ambigua.
+   * Es el discriminador primario contra el zigzag, y llegó tarde: hasta que el
+   * autor lo probó a mano, el círculo no miraba los cambios de sentido, así que
+   * una sierra dibujada en arco —que es como sale naturalmente— acumulaba giro
+   * suficiente y se clasificaba como círculo. Separarlos por esta medida en vez
+   * de endurecer `circleMinNetTurn` es lo que permite arreglar el zigzag sin
+   * volver más difícil el círculo, que ya estaba bien calibrado (10/10).
    */
-  zigzagMaxNetTurn: 3.0,
+  circleMaxReversals: 1,
 
   /**
    * `zigzag`: diagonal mínima del bounding box (px). Gemelo de
@@ -137,6 +140,11 @@ export const GESTURE = tuning({
   /**
    * `zigzag`: cambios de sentido de giro mínimos. Evita que una S —que también
    * cancela— cuente como zigzag. Rango sano: 3–5.
+   *
+   * Junto con `circleMaxReversals` es lo que hace a los dos gestos disjuntos:
+   * mientras este valor sea mayor, ningún trazo puede ser ambos. Ya no se
+   * acotan por giro neto — un zigzag dibujado en arco tiene giro acumulado alto
+   * y sigue siendo un zigzag.
    */
   zigzagMinReversals: 3,
 

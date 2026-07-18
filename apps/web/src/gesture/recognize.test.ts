@@ -256,7 +256,63 @@ describe("propiedades del reconocedor", () => {
   });
 
   it("los umbrales de `circle` y `zigzag` son disjuntos por construcción", () => {
-    expect(GESTURE.zigzagMaxNetTurn).toBeLessThan(GESTURE.circleMinNetTurn);
+    // Se separan por cambios de SENTIDO, no por cantidad de giro. Un zigzag
+    // dibujado en arco acumula giro de círculo; lo que lo delata es que va y
+    // vuelve. Mientras este orden se mantenga, ningún trazo puede ser ambos.
+    expect(GESTURE.circleMaxReversals).toBeLessThan(GESTURE.zigzagMinReversals);
+  });
+
+  /**
+   * Regresión del bug que encontró el autor en la ronda 1: la sierra dibujada
+   * en arco —que es como sale naturalmente, no como la genera un test— se
+   * clasificaba como `circle` porque el círculo no miraba los cambios de
+   * sentido.
+   */
+  it("un zigzag dibujado en arco sigue siendo `zigzag`", () => {
+    const puntos: GesturePoint[] = [];
+    const picos = 8;
+    for (let i = 0; i <= picos; i += 1) {
+      // Los vértices se reparten sobre un arco amplio en vez de una recta.
+      const a = (i / picos) * Math.PI * 1.4;
+      const radio = i % 2 === 0 ? 150 : 250;
+      puntos.push({ x: 300 + radio * Math.cos(a), y: 300 + radio * Math.sin(a), t: i * 90 });
+    }
+    const denso: GesturePoint[] = [];
+    for (let i = 1; i < puntos.length; i += 1) {
+      const a = puntos[i - 1]!;
+      const b = puntos[i]!;
+      for (let k = 0; k < 6; k += 1) {
+        const r = k / 6;
+        denso.push({ x: a.x + (b.x - a.x) * r, y: a.y + (b.y - a.y) * r, t: a.t + (b.t - a.t) * r });
+      }
+    }
+    denso.push(puntos[puntos.length - 1]!);
+    expect(kindOf(denso)).toBe("zigzag");
+  });
+
+  /**
+   * Regresión del otro bug de la ronda 1, y el más caro: `hold` no se reconoció
+   * NI UNA VEZ. Un puntero quieto no genera `pointermove`, así que el trazo
+   * llegaba con dos muestras y moría en el mínimo de puntos — el único gesto
+   * cuya esencia es no moverse era el único que el muestreo por movimiento no
+   * podía capturar.
+   */
+  it("`hold` se reconoce aunque llegue con dos muestras", () => {
+    expect(
+      kindOf([
+        { x: 200, y: 200, t: 0 },
+        { x: 200, y: 200, t: 700 },
+      ]),
+    ).toBe("hold");
+  });
+
+  it("dos muestras quietas pero breves siguen siendo un clic, no un `hold`", () => {
+    expect(
+      kindOf([
+        { x: 200, y: 200, t: 0 },
+        { x: 200, y: 200, t: 120 },
+      ]),
+    ).toBe("rechazado:insuficiente");
   });
 
   it("el re-muestreo conserva los extremos del trazo", () => {
@@ -267,13 +323,17 @@ describe("propiedades del reconocedor", () => {
     expect(out[out.length - 1]!.x).toBeCloseTo(trace[trace.length - 1]!.x, 3);
   });
 
-  it("el círculo acumula giro con signo y el zigzag lo cancela", () => {
-    // Es LA distinción entre los dos: misma cantidad de giro, distinto signo.
+  it("el círculo gira siempre igual y el zigzag va y vuelve", () => {
+    // Es LA distinción entre los dos, y no es la cantidad de giro: las dos
+    // acumulan mucho. Es que el círculo no cambia de sentido nunca.
     const circulo = metricsOf(circleTrace(120));
     const sierra = metricsOf(zigzagTrace());
+
     expect(circulo.netTurn).toBeGreaterThan(GESTURE.circleMinNetTurn);
+    expect(circulo.reversals).toBeLessThanOrEqual(GESTURE.circleMaxReversals);
+
     expect(sierra.absTurn).toBeGreaterThan(GESTURE.zigzagMinAbsTurn);
-    expect(sierra.netTurn).toBeLessThan(GESTURE.zigzagMaxNetTurn);
+    expect(sierra.reversals).toBeGreaterThanOrEqual(GESTURE.zigzagMinReversals);
   });
 });
 
