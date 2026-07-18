@@ -5,21 +5,32 @@
 // para el mismo estado — justo lo que la Ley de arquitectura prohíbe. Acá se
 // renderiza leyendo la sala, nunca acumulando estado propio en la UI.
 
-import { cooldownOf, costOf } from "@beforeheadapts/arena-dsl";
+import { ELEMENTS, cooldownOf, costOf } from "@beforeheadapts/arena-dsl";
 
 import "./style.css";
 
 import { downloadText } from "./arena/download.js";
+import { CombatSession } from "./arena/combat.js";
 import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
 import { Builder } from "./builder/ui.js";
+import { Hud, hudModelOf } from "./view/hud.js";
 import { LiveView } from "./view/live.js";
+import { attachPointer } from "./view/pointer.js";
 
 const root = document.querySelector<HTMLDivElement>("#arena");
 if (root === null) throw new Error("falta el contenedor #arena");
 
 const room = new Room("sala-local");
+/**
+ * La sesión de combate envuelve la sala: es la única puerta por la que el
+ * movimiento del jugador se convierte en eventos (ADR 0004). Los prefabs y el
+ * Builder siguen atacando la sala directamente — son la capa deliberada, con el
+ * espacio completo de 5.376 composiciones; los gestos son la capa rápida, con
+ * 32. Las dos conviven a propósito (ADR 0009 §1).
+ */
+const session = new CombatSession(room);
 
 /** Reloj de la sala. Monótono y en milisegundos, como exige el ledger. */
 const now = (): number => Math.round(performance.now());
@@ -54,7 +65,15 @@ const bitacoraLista = document.createElement("ul");
 bitacoraLista.className = "bitacora";
 
 panel.append(botonera, estado, medidor, exportarBoton, bitacoraLista);
-root.append(escena, panel);
+
+// El HUD es DOM y vive FUERA de la escena: el §7 del diseño prohíbe animar el
+// juego con DOM. El ente y sus efectos son SVG; la vida y los cooldowns, no.
+const hud = new Hud((element) => {
+  session.arm(element);
+  log(`elemento armado: ${element}`);
+});
+
+root.append(escena, hud.element, panel);
 
 const view = new LiveView(escena);
 
@@ -105,6 +124,56 @@ function lanzar(lanzable: Lanzable): void {
   }
 }
 
+// --- Combate por cursor ------------------------------------------------------
+// El muestreo se engancha a la escena, no al documento: el gesto es un acto
+// DENTRO de la arena, y así el jugador puede usar el mouse en el panel y el
+// Builder sin que cada clic cuente como un trazo.
+
+const RECHAZO: Record<string, string> = {
+  insuficiente: "trazo demasiado corto",
+  lento: "trazo recto pero lento — más rápido",
+  ambiguo: "no se entendió el trazo",
+};
+
+attachPointer(escena, now, {
+  // Frecuencia alta, costo mínimo: esto NO toca el motor. Solo alimenta la
+  // ventana de 32 posiciones del lector de ruido.
+  onMove: (x, y, t) => {
+    session.observePointer(x, y, t);
+  },
+  onStroke: (points, t) => {
+    const attempt = session.attemptGesture(points, t);
+    if (attempt.kind === "rejected") {
+      // Un rechazo NO consume cooldown: el reconocedor no cobra sus errores.
+      log(`✕ ${RECHAZO[attempt.reason] ?? attempt.reason}`);
+      return;
+    }
+    if (attempt.kind === "cooldown") {
+      // Distinto del rechazo a propósito: son dos fallas con remedios opuestos
+      // —esperar contra volver a dibujar— y tienen que leerse distinto.
+      log(`⧗ ${attempt.gesture} en cooldown, faltan ${((attempt.readyAt - t) / 1000).toFixed(1)} s`);
+      return;
+    }
+    const { outcome } = attempt;
+    log(
+      `${attempt.gesture} · ${session.element} — daño ${outcome.damage.toFixed(2)} · ` +
+        `${outcome.exposures}/${outcome.requiredExposures}` +
+        (outcome.adapted ? " · ADAPTADO" : ""),
+    );
+    view.sync(room.log);
+  },
+});
+
+// Teclas 1-8: el elemento es un modo que se porta, así que cambiarlo cuesta una
+// tecla y no una navegación (ADR 0009 §1).
+window.addEventListener("keydown", (event) => {
+  const index = Number.parseInt(event.key, 10) - 1;
+  const element = ELEMENTS[index];
+  if (element === undefined) return;
+  session.arm(element);
+  log(`elemento armado: ${element}`);
+});
+
 // El Builder persiste en el `localStorage` real; los tests le pasan otro almacén.
 const builder = new Builder(window.localStorage, {
   onLaunch: (build) => lanzar(build),
@@ -122,7 +191,16 @@ exportarBoton.addEventListener("click", () => {
 function frame(): void {
   const t = now();
 
+  // El ruido se consulta por cuadro pero emite a lo sumo cada 3 s: el
+  // rate-limit vive en el `NoiseWatcher`, no acá.
+  const ruido = session.pollNoise(t);
+  if (ruido !== undefined) {
+    log(`el ente percibe agitación (${ruido.exposures}/${ruido.requiredExposures})`);
+    view.sync(room.log);
+  }
+
   view.tick(t);
+  hud.update(hudModelOf(session, t));
 
   for (const { prefab, boton } of botones) {
     const disponible = room.canAttack(prefab.composition, t);
