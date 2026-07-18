@@ -2,6 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    // DOM entra porque `export/browser.ts` graba con canvas y MediaRecorder.
+    // El `lib` no distingue archivos, así que a nivel de tipos habilita el DOM
+    // en todo el paquete: la frontera real la defiende `purity.test.ts`, que
+    // falla si cualquier módulo fuera de `export/browser.ts` toca el entorno.
+    "lib": ["ES2022", "DOM"],
     "rootDir": "./src",
     "outDir": "./dist",
     "tsBuildInfoFile": "./dist/.tsbuildinfo",

@@ -11,6 +11,11 @@
 export * from "./frames/index.js";
 export * from "./render/index.js";
 
+// El guion temporal y la orquestación del export son puros y entran acá. El
+// adaptador que graba con canvas vive en `@beforeheadapts/visualizer/browser`,
+// aparte, para que importar el paquete desde Node nunca arrastre el DOM.
+export * from "./export/index.js";
+
 // El tema se exporta para poder recalibrar la estética sin tocar el render.
 // `svg.ts`, `geometry.ts` y `layout.ts` quedan internos a propósito: son el
 // *cómo* del dibujo, y fijarlos como API pública ataría las manos para cambiarlo.
