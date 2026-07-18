@@ -25,6 +25,7 @@ coverage/
 # Se oculta el "cómo", no el "qué": el conocimiento del proyecto vive en docs/.
 .claude/
 CLAUDE.md
+MEMORY.md
 
 # --- Docs privados: notas personales del autor ---
 docs/privado/
