@@ -1,0 +1,25 @@
+{
+  "name": "@beforeheadapts/web",
+  "version": "0.2.0",
+  "description": "La arena: cliente de la vitrina. Builder de ataques (DSL) + vista del ente. Una sala local = un engine + un log en memoria.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --build && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@beforeheadapts/arena-dsl": "workspace:*",
+    "@beforeheadapts/core": "workspace:*",
+    "@beforeheadapts/visualizer": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}

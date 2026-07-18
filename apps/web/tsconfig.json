@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    // La arena es el adaptador de navegador: acá el DOM es legítimo, a
+    // diferencia de `packages/*`, donde tocarlo sería romper la frontera.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "rootDir": "./src",
+    "outDir": "./dist-types",
+    "tsBuildInfoFile": "./dist-types/.tsbuildinfo",
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "types": ["vite/client"]
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/arena-dsl" },
+    { "path": "../../packages/visualizer" }
+  ],
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "dist-types", "node_modules", "**/*.test.ts"]
+}
