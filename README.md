@@ -23,32 +23,49 @@ Las reglas 1 y 5 no se contradicen: operan en capas distintas. `eff(k)` atenúa 
 
 ## Arquitectura
 
+Todas las flechas apuntan hacia adentro. El núcleo no importa a nadie: no sabe que existe una arena, ni un visualizador, ni un DSL de ataques.
+
 ```mermaid
-flowchart TB
-    subgraph nucleo["packages/core — el motor"]
-        direction LR
-        sig["signature/<br/>firma canónica, clusters, similitud"]
-        led["ledger/<br/>log append-only versionado"]
-        pol["policy/<br/>curva, memoria, generalización"]
-        eng["engine/<br/>process() puro + selectores"]
-    end
+flowchart LR
+    web["apps/web<br/>la arena"]
+    sim["apps/balance-sim<br/>simulación de balance"]
+    dsl["packages/arena-dsl<br/>composición → firma"]
+    vis["packages/visualizer<br/>log → frames → SVG"]
+    core["packages/core<br/><br/>EL MOTOR<br/>signature · ledger<br/>policy · engine"]
 
-    subgraph adaptadores["Adaptadores"]
-        direction LR
-        dsl["packages/arena-dsl<br/>DSL de ataques → firma"]
-        vis["packages/visualizer<br/>log → frames → SVG"]
-        sim["apps/balance-sim<br/>simulación de balance"]
-    end
-
-    dsl --> nucleo
-    vis --> nucleo
-    sim --> nucleo
+    web --> dsl
+    web --> vis
     sim --> dsl
+    dsl --> core
+    vis --> core
+    sim --> core
 
-    nucleo -.->|"nunca depende de"| adaptadores
+    classDef nucleo fill:#1f2933,stroke:#7b8794,color:#fff,stroke-width:2px
+    class core nucleo
 ```
 
-La dependencia va **en una sola dirección**. El núcleo no sabe que existe un visualizador, ni una arena, ni un DSL de ataques.
+Esa dirección es lo que hace que el motor sea reutilizable: el mismo núcleo que la arena usa para adaptarse a ataques compuestos es el que la [Fase 5](docs/adr/0005-adaptador-de-autodefensa-del-sitio.md) va a usar para adaptarse a patrones de tráfico hostil, sin tocar una línea.
+
+### El ciclo de un ataque
+
+El estado nunca se muta: se deriva plegando el log. Un replay es literalmente la misma operación con los mismos datos, y por eso produce siempre el mismo resultado.
+
+```mermaid
+flowchart LR
+    comp["composición<br/>del jugador"]
+    sig["firma<br/>canónica"]
+    proc["process()"]
+    log[("log<br/>append-only")]
+    est["estado<br/>del ente"]
+    svg["frames → SVG"]
+
+    comp -->|StimulusTranslator| sig
+    sig --> proc
+    proc -->|eventos| log
+    log -->|reduce| est
+    log -->|framesFrom| svg
+    est -.->|"entra al siguiente process()"| proc
+```
 
 ### Ley de arquitectura
 
