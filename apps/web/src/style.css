@@ -96,3 +96,113 @@ button:disabled {
   text-align: center;
   border: 1px dashed #1e2b31;
 }
+
+/* --- Builder --- */
+
+.builder {
+  grid-column: 1 / -1;
+  border-top: 1px solid #10191d;
+  padding-top: 20px;
+}
+
+.builder h2,
+.builder h3 {
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+.builder h3 {
+  color: var(--tenue);
+}
+
+.capa {
+  border-left: 2px solid #10191d;
+  padding-left: 14px;
+  margin-bottom: 20px;
+}
+
+/* La capa mecánica es la que el motor ve: se marca. */
+.capa-mecanica {
+  border-left-color: var(--tinta);
+}
+
+.nota {
+  color: var(--tenue);
+  margin: 0 0 12px;
+  max-width: 60ch;
+}
+
+.campo {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.campo > select,
+.campo > input[type="range"] {
+  flex: 1;
+  max-width: 260px;
+}
+
+.campo-mods {
+  flex-wrap: wrap;
+}
+
+.campo-mods label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tenue);
+}
+
+select,
+input[type="text"] {
+  font: inherit;
+  padding: 5px 8px;
+  color: var(--tinta);
+  background: var(--fondo);
+  border: 1px solid var(--tenue);
+}
+
+.resumen {
+  color: var(--asimilado);
+  margin: 12px 0 0;
+  word-break: break-word;
+}
+
+.acciones,
+.compartir {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.acciones input,
+.compartir input {
+  flex: 1;
+  min-width: 0;
+}
+
+.builds {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+
+.builds li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid #10191d;
+}
+
+.builds li span {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}

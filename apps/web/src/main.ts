@@ -13,6 +13,7 @@ import { downloadText } from "./arena/download.js";
 import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
+import { Builder } from "./builder/ui.js";
 import { LiveView } from "./view/live.js";
 
 const root = document.querySelector<HTMLDivElement>("#arena");
@@ -81,11 +82,14 @@ function log(line: string): void {
   );
 }
 
-function lanzar(prefab: Prefab): void {
+/** Un prefab y una build del Builder se lanzan igual: nombre + composición. */
+type Lanzable = Pick<Prefab, "name" | "composition">;
+
+function lanzar(lanzable: Lanzable): void {
   try {
-    const outcome = room.attack(prefab.composition, now());
+    const outcome = room.attack(lanzable.composition, now());
     log(
-      `${prefab.name} — daño ${outcome.damage.toFixed(2)} · ` +
+      `${lanzable.name} — daño ${outcome.damage.toFixed(2)} · ` +
         `eff ${outcome.effApplied.toFixed(3)} · ` +
         `${outcome.exposures}/${outcome.requiredExposures}` +
         (outcome.adapted ? " · ADAPTADO" : ""),
@@ -94,12 +98,19 @@ function lanzar(prefab: Prefab): void {
     view.sync(room.log);
   } catch (error) {
     if (error instanceof CooldownError) {
-      log(`${prefab.name} — en cooldown, faltan ${((error.readyAt - now()) / 1000).toFixed(1)} s`);
+      log(`${lanzable.name} — en cooldown, faltan ${((error.readyAt - now()) / 1000).toFixed(1)} s`);
     } else {
       throw error;
     }
   }
 }
+
+// El Builder persiste en el `localStorage` real; los tests le pasan otro almacén.
+const builder = new Builder(window.localStorage, {
+  onLaunch: (build) => lanzar(build),
+  onNotice: (mensaje) => log(mensaje),
+});
+root.append(builder.element);
 
 exportarBoton.addEventListener("click", () => {
   downloadText(replayFileName(room), serializeReplay(room));
