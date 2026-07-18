@@ -18,6 +18,39 @@ Prioridad: 🔴 bloqueante (si falla, no se cierra la fase) · 🟡 ajuste (se a
 
 ---
 
+## Cuándo testear
+
+**Dos rondas, no una al final.**
+
+| Ronda | Cuándo | Cubre | La pregunta |
+|---|---|---|---|
+| **1** | tras el paso 4 (HUD + cableado) | R1–R9 | ¿la capa de entrada se siente bien en la mano? |
+| **2** | tras el paso 7 (combate completo) | R10+ | ¿el combate se lee y se puede jugar? |
+
+La ronda 1 va **temprano a propósito**. Los umbrales del reconocedor son lo más frágil de la fase y son el cimiento de todo lo demás; recalibrarlos en el paso 5 es editar una línea de `balance.ts`, y en el paso 8 es revisar si todo lo construido encima sigue teniendo sentido.
+
+Antes del paso 4 no hay nada que probar a mano: el combate existe y está testeado, pero no está cableado a la pantalla.
+
+## Cómo reportar
+
+```
+[R2] círculo
+Hice: 10 círculos naturales, tamaño mediano, sin practicar
+Pasó: 4/10 reconocidos, el resto "ambiguo"
+Esperaba: >=8/10
+Replay: replay-sala-local-....json (adjunto)
+```
+
+Usar `[NUEVO]` en vez del número para lo que no esté en la lista. Esos importan especialmente: la lista la escribió Claude, así que arrastra sus puntos ciegos.
+
+Tres pedidos concretos:
+
+1. **Números, no impresiones, en R1 y R2.** "El círculo anda mal" obliga a adivinar; "4 de 10" dice cuánto mover el umbral y para qué lado.
+2. **Exportar el replay si el bug toca el log.** Es lo más valioso que se puede adjuntar y es específico de este proyecto: el replay es determinista, así que la sesión se vuelve un fixture golden y el bug se reproduce exacto en un test. Con replay se arregla con certeza; sin replay, con hipótesis.
+3. **Separar bugs de balance.** Si algo se siente *injusto, muy difícil o muy fácil*, eso no es un bug: es balance, y por decisión del autor no se ajusta a ojo. Marcarlo `[BALANCE]` — se anota como insumo de la suite de 10.000 sesiones y **no se toca en 3b**. Si los dos canales se mezclan, el balance termina parcheado por intuición, que es justo lo que la fase de balance existe para evitar.
+
+---
+
 ## Paso 2 — Reconocedor de gestos
 
 `pnpm --filter @beforeheadapts/web test` (83 verdes) cubre la geometría. Lo que **no** cubre:
