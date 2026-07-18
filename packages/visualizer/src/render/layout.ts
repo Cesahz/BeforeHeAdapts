@@ -23,6 +23,11 @@ export interface NodeLayout {
   readonly radius: number;
   readonly adapted: boolean;
   readonly confidence: number;
+  /**
+   * Avance hacia el salto, en `[0, 1]`. Es lo que dibuja la cristalización:
+   * el aviso de que la ventana se está cerrando (§4 del diseño del adaptador).
+   */
+  readonly progress: number;
 }
 
 /** Un hilo de similitud entre dos clusters (R6). */
@@ -98,6 +103,7 @@ function nodeOf(
     radius: theme.nodeRadius + (required - 1) * theme.nodeGrowth,
     adapted: cluster.adapted,
     confidence: cluster.confidence,
+    progress: cluster.progress,
   });
 }
 

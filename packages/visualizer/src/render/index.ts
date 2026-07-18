@@ -240,7 +240,8 @@ function shockwaveLayer(
  * advertencia: el ente ya sabe defenderse de eso, y se ve.
  */
 function nodeLayer(layout: Layout, theme: Theme): readonly string[] {
-  return layout.nodes.map((node) =>
+  return layout.nodes.flatMap((node) => [
+    ...crystalLayer(node, theme),
     el("circle", {
       class: node.adapted ? "node node-adapted" : "node",
       "data-cluster": node.clusterId,
@@ -251,5 +252,37 @@ function nodeLayer(layout: Layout, theme: Theme): readonly string[] {
       stroke: node.adapted ? theme.palette.assimilated : theme.palette.node,
       "stroke-width": node.adapted ? 3 : 1,
     }),
-  );
+  ]);
+}
+
+/**
+ * La cristalización de R5: el aviso de que la ventana se está cerrando (§4).
+ *
+ * Un cluster a medio adaptar dibuja un anillo facetado que se endurece a medida
+ * que `k` se acerca a `N(c)`. La opacidad va con el **cuadrado** del avance a
+ * propósito: casi invisible al principio y evidente en la última exposición, que
+ * es cuando la información importa. Con relación lineal, el primer golpe de una
+ * firma de dos exposiciones ya gritaría lo mismo que el último de una de siete.
+ *
+ * Solo aparece antes del salto: una vez adaptado el cluster, el aviso no
+ * significa nada y el nodo pasa a su estado asimilado (ADR 0007 §4).
+ */
+function crystalLayer(node: Layout["nodes"][number], theme: Theme): readonly string[] {
+  if (node.adapted || node.progress <= 0) return [];
+
+  const radius = node.radius * (1 + theme.crystalGrowth * node.progress);
+  const vertices = regularPolygon(node.center, radius, theme.crystalFacets);
+
+  return [
+    el("polygon", {
+      class: "crystal",
+      "data-cluster": node.clusterId,
+      points: pointsAttr(vertices),
+      fill: "none",
+      stroke: theme.palette.incoming,
+      "stroke-width": 1,
+      "stroke-opacity": node.progress * node.progress * theme.crystalOpacity,
+      "stroke-linejoin": "round",
+    }),
+  ];
 }

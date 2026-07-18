@@ -54,6 +54,19 @@ export interface Theme {
   readonly shockwaveRadius: number;
   /** Amplitud de la vibración de vértices, en unidades de usuario. */
   readonly vibration: number;
+  /**
+   * Cristalización: el aviso de que `k` se acerca a `N(c)` (§4 del diseño).
+   *
+   * Un cluster a medio adaptar dibuja un anillo facetado que se endurece a
+   * medida que avanza. Es lo que convierte la carrera de tempo en imagen: el
+   * jugador ve cerrarse la ventana antes de que el salto ocurra, en vez de
+   * enterarse cuando ya es tarde.
+   */
+  readonly crystalOpacity: number;
+  /** Cuánto crece el anillo respecto del nodo, con avance pleno. */
+  readonly crystalGrowth: number;
+  /** Caras del anillo facetado. */
+  readonly crystalFacets: number;
 }
 
 export const defaultTheme: Theme = Object.freeze({
@@ -83,6 +96,10 @@ export const defaultTheme: Theme = Object.freeze({
   shockwaveSpan: 4,
   shockwaveRadius: 300,
   vibration: 4,
+  crystalOpacity: 0.85,
+  crystalGrowth: 1.6,
+  // Seis caras: leen como cristal sin competir con el polígono del ente.
+  crystalFacets: 6,
 });
 
 /** El centro del lienzo: donde vive el ente. */

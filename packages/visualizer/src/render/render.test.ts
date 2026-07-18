@@ -273,3 +273,84 @@ describe("inyección — clusterId hostil", () => {
     expect(attrOf(conNodo, "node-adapted", "data-cluster")).toContain("&lt;script&gt;");
   });
 });
+
+/**
+ * Cristalización (§4 del diseño del adaptador web): el aviso de que `k` se
+ * acerca a `N(c)`. Es feedback obligatorio de R5 — sin esto el jugador se
+ * entera del salto cuando ya ocurrió.
+ */
+describe("cristalización", () => {
+  /** Log con una firma de 3 primitivas golpeada `hits` veces. */
+  const conGolpes = (hits: number) => {
+    const signature = canonicalize(["a", "b", "c"], 1);
+    let state = createInitialState();
+    for (let i = 0; i < hits; i++) {
+      state = process(state, signature, i * 1000).state;
+    }
+    return framesFrom(state.log);
+  };
+
+  const crystalOpacity = (svg: string): number | null => {
+    const match = /class="crystal"[^>]*stroke-opacity="([\d.]+)"/.exec(svg);
+    return match === null ? null : Number(match[1]);
+  };
+
+  it("no dibuja cristal antes de la primera exposición", () => {
+    const frames = conGolpes(1);
+    // El primer frame es `ResistanceApplied`: el cluster todavía no existe.
+    expect(crystalOpacity(renderFrame(frames, 0))).toBeNull();
+  });
+
+  it("se endurece a medida que k se acerca a N(c)", () => {
+    const unGolpe = renderFrames(conGolpes(1)).at(-1)!;
+    const dosGolpes = renderFrames(conGolpes(2)).at(-1)!;
+
+    const a = crystalOpacity(unGolpe);
+    const b = crystalOpacity(dosGolpes);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(b!).toBeGreaterThan(a!);
+  });
+
+  it("desaparece al completarse la adaptación", () => {
+    // Tres golpes sobre una firma de tres primitivas: el salto ya ocurrió.
+    const adaptado = renderFrames(conGolpes(3)).at(-1)!;
+    expect(adaptado).toContain("node-adapted");
+    expect(crystalOpacity(adaptado)).toBeNull();
+  });
+
+  it("el cristal se cierra del todo en el frame anterior al salto", () => {
+    // `ExposureRecorded` ya dejó `progress = 1`, pero `AdaptationCompleted`
+    // todavía no se aplicó: hay exactamente un frame donde el cluster está
+    // cristalizado al máximo y aún no adaptó. Es el instante previo al salto, y
+    // se ve como tal — el cristal termina de cerrarse y se rompe.
+    const frames = conGolpes(3);
+    const svgs = renderFrames(frames);
+
+    const indiceSalto = frames.findIndex((f) => f.event.type === "AdaptationCompleted");
+    expect(indiceSalto).toBeGreaterThan(0);
+
+    expect(crystalOpacity(svgs[indiceSalto - 1]!)).toBeCloseTo(defaultTheme.crystalOpacity, 10);
+    expect(crystalOpacity(svgs[indiceSalto]!)).toBeNull();
+  });
+
+  it("una firma mínima solo cristaliza en ese frame previo, nunca antes", () => {
+    // N(c) = 1: no hay ventana que anunciar, así que el aviso no existe hasta
+    // el instante mismo del salto.
+    let state = createInitialState();
+    state = process(state, canonicalize(["solo"], 1), 0).state;
+    const frames = framesFrom(state.log);
+    const svgs = renderFrames(frames);
+    const indiceSalto = frames.findIndex((f) => f.event.type === "AdaptationCompleted");
+
+    for (let i = 0; i < indiceSalto - 1; i++) {
+      expect(crystalOpacity(svgs[i]!)).toBeNull();
+    }
+    expect(crystalOpacity(svgs.at(-1)!)).toBeNull();
+  });
+
+  it("sigue siendo determinista byte a byte", () => {
+    const frames = conGolpes(2);
+    expect(renderFrames(frames)).toEqual(renderFrames(frames));
+  });
+});
