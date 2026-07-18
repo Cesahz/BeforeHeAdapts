@@ -114,15 +114,15 @@ Mientras probás, fijate qué trazo te sale **naturalmente** que hoy no existe (
 
 Lo que los tests **ya garantizan** y no hace falta que revises a mano: un minuto de agitación a 125 Hz (7.500 posiciones) produce menos de 100 eventos, todos de tipos válidos del ledger; duplicar el sampling rate no cambia el log; un gesto en cooldown no llega a la sala.
 
-### 🔴 R6. El ruido se siente antes de entenderlo
+### 🟡 R6. El ruido se detecta cuando corresponde
 
-**Qué hacer:** mover el mouse de forma agitada (sin apretar el botón) durante ~15 segundos seguidos, mirando al ente.
+⚠️ **Corrección de alcance.** En la ronda 1 el ruido se ve **solo en el medidor de agitación del HUD**. La reacción visible del ENTE (orientarse hacia el cursor, contraerse) es vocabulario de render y llega en el paso 5, así que esa mitad se verifica en la ronda 2 — ver R14.
 
-**Qué tiene que pasar:** el ente **reacciona de forma visible pero sutil** mientras te agitás — se orienta hacia el cursor y se contrae un poco. No tiene que parecer un ataque ni un bug.
+**Qué hacer:** mover el mouse de forma agitada (sin apretar el botón) durante ~15 segundos, mirando el medidor de agitación del HUD.
 
-**La pregunta real:** ¿te diste cuenta de que te estaba mirando **antes** de leer que existía la mecánica? Si tuviste que saberlo para notarlo, el feedback es demasiado sutil.
+**Qué tiene que pasar:** el medidor sube al agitarte y baja al moverte suave. A los ~12 s de agitación acumulada aparece en la bitácora que el ente percibe agitación, y el contador de contraataques llega a 1.
 
-**Si falla por invisible:** la reacción preventiva es render, no constante — avisame y la amplifico. **Si falla por molesto** (el ente tiembla todo el tiempo mientras jugás normal): subir `NOISE.threshold` (0,55 → 0,65).
+**Si falla por sordo** (te agitás y el medidor no sube): bajar `NOISE.threshold` (0,55 → 0,45). **Si falla por sensible** (sube jugando normal): subirlo a 0,65.
 
 ### 🟡 R7. Jugar normal no debería despertar el ruido
 
@@ -148,9 +148,45 @@ Lo que los tests **ya garantizan** y no hace falta que revises a mano: un minuto
 
 **Es información, no veredicto:** esto *es* el variador puro jugable, y quiero saber si se siente como una estrategia legítima o como un exploit aburrido. La respuesta alimenta la futura fase de balance, no un cambio ahora.
 
-## Paso 4 — HUD
+## Paso 4 — HUD y cableado
 
-*(pendiente)*
+**A partir de acá la ronda 1 es ejecutable.** Comando: `pnpm --filter @beforeheadapts/web dev` → http://localhost:5173
+
+Cómo se juega: **dibujás sobre la escena** (el área del ente) manteniendo apretado el botón y soltando al terminar el trazo. El elemento se arma con las **teclas 1-8** o clickeando en el HUD. Los botones de prefabs y el Builder siguen funcionando igual que en 3a.
+
+### 🔴 R10. El HUD no miente
+
+**Qué hacer:** lanzar un gesto y mirar la fila de ese gesto en el HUD; después cambiar de elemento (tecla distinta) y volver a mirar.
+
+**Qué tiene que pasar:** la barra de cooldown se llena progresivamente y la fila se marca disponible justo cuando el gesto vuelve a entrar. Al **cambiar de elemento el mismo gesto aparece disponible de nuevo** — son clusters distintos, así que es correcto, no un bug.
+
+**Por qué es bloqueante:** un HUD que miente sobre el cooldown hace que cada rechazo se sienta arbitrario, y arruina la lectura de todo lo demás que probemos.
+
+### 🔴 R11. El trazado no le roba clics al resto de la página
+
+**Qué hacer:** usar los botones de prefabs, el Builder (selects, sliders, inputs) y el botón de exportar, normalmente.
+
+**Qué tiene que pasar:** todo funciona y **ningún clic en el panel se interpreta como un trazo**. El muestreo está enganchado a la escena, no al documento, justamente para esto.
+
+**Caso borde que me interesa:** empezar un trazo dentro de la escena y **soltar el botón fuera** (sobre el panel, o fuera de la ventana). El trazo tiene que cerrarse igual y no dejar puntos colgados que se peguen al gesto siguiente.
+
+### 🟡 R12. Los cooldowns dejan jugar
+
+**Qué hacer:** una sesión de ~3 minutos usando los cuatro gestos.
+
+**Qué tiene que pasar:** hay algo que hacer casi siempre; no se siente que estés mirando barras llenarse.
+
+**⚠️ Ojo con el canal:** si el problema es que *no da* lanzar nada, eso es un bug de integración y va como bug. Si es que *se siente lento o aburrido*, eso es `[BALANCE]` y NO se toca en 3b.
+
+### ⚪ R13. ¿El teclado o el mouse?
+
+Cambiar elemento con teclas 1-8 contra clickear en el HUD: ¿cuál usaste sin pensar? El diseño asume que el teclado, porque el elemento es un modo que se porta y tiene que costar una tecla. Si terminaste clickeando, la premisa está mal.
+
+## Ronda 2 — pendientes ya identificados
+
+### 🔴 R14. El ente reacciona visiblemente a la agitación
+
+La mitad de R6 que necesita el paso 5. La pregunta que importa: **¿te diste cuenta de que te estaba mirando antes de saber que la mecánica existía?** Si tuviste que saberlo para notarlo, es demasiado sutil.
 
 ## Paso 5 — Deformación del ente
 
