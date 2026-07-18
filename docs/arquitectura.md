@@ -194,8 +194,10 @@ Justificación: un solo lenguaje del núcleo al navegador; el motor corre **idé
 | **2 — Visualizador** | Log → animación: curvas de resistencia por firma, saltos de adaptación, red de similitud entre clusters. | 1–2 semanas | **Primer material publicable: gifs de simulaciones, sin web todavía** |
 | **3 — Arena local** | DSL + builder + ente en el navegador, single-player, todo client-side (el motor corre en el navegador). | 2–3 semanas | **Segundo hito publicable: demo jugable** |
 | **4 — Salas online** | Server autoritativo, WebSocket, salas, persistencia, deploy. | 3–4 semanas | El sueño comunitario en producción |
-| **5 — Adaptador serio** | Logs/anomalías + writeup técnico "mismo motor, dos dominios". | ~2 semanas (opcional) | Argumento de arquitectura completo |
+| **5 — Auto-defensa del sitio** | El mismo motor supervisa la seguridad operativa de la arena (rate limiting, mitigación de bots) como segundo dominio real, en instancia y log separados. Modo sombra primero. + writeup "mismo motor, dos dominios". | ~2 semanas (opcional) | Argumento de arquitectura completo, demostrado en producción |
 | **6 — Núcleo en Rust** | Reescribir `packages/core` en Rust→WASM contra la misma suite del contrato. Cero cambios fuera del núcleo. | opcional, sin apuro | Writeup: "mismo contrato, dos implementaciones" + aprendizaje de Rust sobre sistema real |
+
+La Fase 5 fue redefinida por [ADR 0005](adr/0005-adaptador-de-autodefensa-del-sitio.md): el adaptador de logs/anomalías de juguete se reemplaza por la auto-defensa del sitio, con condiciones no negociables (instancia y log aislados, traducción por puertos, modo sombra antes que modo activo, frenos duros y kill-switch).
 
 Nota sobre el orden: la Fase 2 va **antes** que cualquier web a propósito. Tenés material para redes al mes de empezar, y cada fase posterior reutiliza el visualizador. Nunca hay un período largo sin nada que mostrar.
 
