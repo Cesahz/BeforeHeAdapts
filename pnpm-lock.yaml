@@ -211,6 +211,22 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  packages/arena-dsl:
+    dependencies:
+      '@beforeheadapts/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      fast-check:
+        specifier: ^3.23.2
+        version: 3.23.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9
+
   packages/core:
     devDependencies:
       fast-check:

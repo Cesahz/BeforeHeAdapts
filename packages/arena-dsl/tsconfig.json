@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "types": []
+  },
+  // Mismo arreglo que en el visualizador: el núcleo entra por project reference
+  // para tipos, y Vitest lo resuelve por fuente (ver `vitest.config.ts`) para no
+  // exigir un build previo al correr los tests. Si se toca una, tocar la otra.
+  "references": [{ "path": "../core" }],
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules", "**/*.test.ts"]
+}
