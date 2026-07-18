@@ -117,3 +117,4 @@ function frameOf(
     confidence: confidenceOf(state, clusterId),
   });
 }
+export * from "./densify.js";
