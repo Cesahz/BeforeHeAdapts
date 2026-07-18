@@ -39,7 +39,7 @@ El prefijo no es decoración: es lo que hace legible el log crudo, lo que evita 
 4. `intensity = cost` (punto 3).
 5. Se delega en `canonicalize()` del núcleo, que ordena y deduplica.
 
-Por ADR 0002, `N(c)` queda entre **1 y 6**: `elem:ember` solo es la firma mínima de R2 y el ente la adapta al primer golpe; una composición de los cuatro ejes con los cuatro modificadores exige 6 exposiciones.
+Por ADR 0002, `N(c)` queda entre **1 y 7**: `elem:ember` solo es la firma mínima de R2 y el ente la adapta al primer golpe; una composición máxima (elemento + vector + patrón + los cuatro modificadores = 7 primitivas) exige 7 exposiciones.
 
 ### 3. Economía: cooldown por costo, sin monedas
 
@@ -50,7 +50,7 @@ cooldown = 500 ms × cost
 
 Los ejes base cuestan 1; **los modificadores cuestan 2**. Suman `N` igual que un eje base pero pagan el doble de tempo: apilar los cuatro modificadores es la jugada más cara del juego, no la dominante por defecto. La única moneda de la Fase 3a es el tiempo — no hay recursos, inventario ni progresión.
 
-El resultado es la carrera de tempo que pide el §4 del diseño: un ataque simple pega cada 0,5 s pero muere en un golpe; uno de 6 primitivas sobrevive 6 exposiciones pero solo puede lanzarse cada 5,5 s. Ninguna de las dos estrategias domina sola.
+El resultado es la carrera de tempo que pide el §4 del diseño: un ataque simple pega cada 0,5 s pero muere en un golpe; la composición máxima de 7 primitivas sobrevive 7 exposiciones pero solo puede lanzarse cada 5,5 s. Ninguna de las dos estrategias domina sola.
 
 ### 4. `weaknessOf` se resuelve en el adaptador, no en el núcleo
 
