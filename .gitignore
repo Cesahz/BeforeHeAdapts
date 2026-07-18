@@ -1,47 +1,42 @@
+# ============================================
+# BeforeHeAdapts — .gitignore
+# ============================================
 
-# Rastros de Claude / IA
-.claude/
-CLAUDE.md
-.claude-settings.json
-.claude-settings.local.json
-
-# Dependencias (Node/pnpm)
+# --- Dependencias ---
 node_modules/
 .pnpm-store/
+.pnpm-debug.log*
 
-# Builds y Compilación (TypeScript / Core)
+# --- Builds y artefactos ---
 dist/
 build/
 out/
-.tsbuildinfo
-
-# Testing (Vitest)
+*.tsbuildinfo
 coverage/
+.vite/
+.turbo/
 
-# Entorno y Secretos
+# --- Entorno y secretos ---
 .env
-.env.*.local
-*.pem
+.env.*
+!.env.example
 
-# Logs de ejecución
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# --- Claude Code: método de trabajo con IA (no publicar) ---
+# Se oculta el "cómo", no el "qué": el conocimiento del proyecto vive en docs/.
+.claude/
+CLAUDE.md
 
-# Sistema Operativo y Editores
+# --- Docs privados: notas personales del autor ---
+docs/privado/
+
+# --- Renders del visualizador  ---
+packages/visualizer/renders/
+
+# --- Sistema operativo / editor ---
 .DS_Store
-.AppleDouble
-.LSOverride
 Thumbs.db
-Icon
-.vscode/
+desktop.ini
+*.log
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.vscode/*
+!.vscode/extensions.json
