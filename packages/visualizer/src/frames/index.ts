@@ -21,11 +21,18 @@ import {
   type EngineState,
   type EventLog,
   type PolicyInput,
+  type StimulusSignature,
 } from "@beforeheadapts/core";
 
 /** Lo que se dibuja de un cluster en un instante del replay. */
 export interface ClusterFrame {
   readonly clusterId: ClusterId;
+  /**
+   * La firma del cluster, leída del motor. La necesita el render para calcular
+   * `sim()` y dibujar los hilos de similitud de R6 (ADR 0007 §3); exponerla es
+   * derivar un dato del motor, no acumular estado propio del visualizador.
+   */
+  readonly signature: StimulusSignature;
   /** Resistencia vigente: escalón puro, `0` hasta el salto de adaptación (R1). */
   readonly resistance: number;
   /** `k`: exposiciones acumuladas. */
@@ -99,6 +106,7 @@ function frameOf(
   const required = requiredExposures(cluster.signature);
   return Object.freeze({
     clusterId,
+    signature: cluster.signature,
     resistance: resistanceOf(state, clusterId),
     exposureCount: cluster.exposureCount,
     requiredExposures: required,

@@ -99,6 +99,22 @@ describe("framesFrom — el frame es proyección del motor, no estado paralelo",
     }
   });
 
+  // El render dibuja los hilos de similitud de R6, y para eso necesita `sim()`
+  // entre firmas — que sin este campo no tiene de dónde sacar. La firma se
+  // **lee** del estado del motor (ADR 0007 §3): es dato derivado, no estado que
+  // el visualizador acumule por su cuenta.
+  it("expone la firma del cluster, tal como la tiene el motor", () => {
+    const log = logOf(compuesta, 2);
+    const frames = framesFrom(log);
+    const clusterId = clusterKeyOf(compuesta);
+
+    const cluster = frames.at(-1)!.clusters.find((c) => c.clusterId === clusterId)!;
+    expect(cluster.signature).toEqual(compuesta);
+    // La identidad del cluster es función pura de su firma (ADR 0002): si la
+    // firma expuesta no reprodujera el id, estaríamos mostrando otra cosa.
+    expect(clusterKeyOf(cluster.signature)).toBe(clusterId);
+  });
+
   it("acumula los clusters vistos en orden estable de aparición", () => {
     let state = createInitialState({}, "sala-multi");
     state = process(state, fuego, 1_000).state;
