@@ -18,13 +18,29 @@ export interface Point {
   readonly y: number;
 }
 
+const TAU = Math.PI * 2;
+
+/**
+ * Decimales que sobreviven en un atributo SVG.
+ *
+ * Tres alcanzan de sobra a resolución de pantalla y hacen que el string sea
+ * estable: sin esto, dos corridas del mismo frame pueden diferir en el último
+ * bit del flotante y el SVG deja de ser comparable byte a byte.
+ */
+const SVG_PRECISION = 3;
+
 /**
  * Polar → cartesiano alrededor de un centro.
  *
  * @param angle radianes, `0` hacia arriba, creciendo en sentido horario.
  */
-export function polar(_center: Point, _radius: number, _angle: number): Point {
-  throw new Error("no implementado");
+export function polar(center: Point, radius: number, angle: number): Point {
+  // `sin` en x y `-cos` en y es lo que rota la convención: 0 queda arriba
+  // (y negativo en SVG) y el ángulo avanza en sentido horario.
+  return {
+    x: center.x + radius * Math.sin(angle),
+    y: center.y - radius * Math.cos(angle),
+  };
 }
 
 /**
@@ -36,12 +52,37 @@ export function polar(_center: Point, _radius: number, _angle: number): Point {
  * @param sides al menos 3; menos no es un polígono y es error del llamador.
  */
 export function regularPolygon(
-  _center: Point,
-  _radius: number,
-  _sides: number,
-  _rotation = 0,
+  center: Point,
+  radius: number,
+  sides: number,
+  rotation = 0,
 ): readonly Point[] {
-  throw new Error("no implementado");
+  if (!Number.isInteger(sides) || sides < 3) {
+    throw new RangeError(`un polígono necesita al menos 3 lados enteros, no ${sides}`);
+  }
+
+  const step = TAU / sides;
+  return Object.freeze(
+    Array.from({ length: sides }, (_, i) => polar(center, radius, rotation + i * step)),
+  );
+}
+
+/**
+ * Mezclador de bits de 32 bits (finalizador de murmur3).
+ *
+ * No busca calidad criptográfica: busca que semillas contiguas —`seq` y `seq+1`,
+ * vértice `i` e `i+1`— den valores sin relación visible. Si el ruido fuera
+ * correlacionado, la vibración se leería como un patrón que ondula en vez de
+ * como una sacudida.
+ */
+function mix(n: number): number {
+  let h = n | 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x21f0aaad);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x735a2d97);
+  h ^= h >>> 15;
+  return h >>> 0;
 }
 
 /**
@@ -55,16 +96,22 @@ export function regularPolygon(
  * @param seed normalmente el `seq` del evento.
  * @param index índice del vértice, para que no vibren todos igual.
  */
-export function jitter(_seed: number, _index: number): number {
-  throw new Error("no implementado");
+export function jitter(seed: number, index: number): number {
+  // La constante es el recíproco de la razón áurea en 32 bits: separa bien las
+  // semillas contiguas antes de mezclarlas con el índice.
+  const combined = Math.imul(seed | 0, 0x9e3779b1) ^ mix(index | 0);
+  return (mix(combined) / 0xffffffff) * 2 - 1;
 }
 
 /**
  * Escala del ente `age` frames después de una exposición: se contrae de golpe y
  * recupera. `1 - peak` en `age = 0`, de vuelta en `1` desde `age >= span`.
  */
-export function contractionScale(_age: number, _span: number, _peak: number): number {
-  throw new Error("no implementado");
+export function contractionScale(age: number, span: number, peak: number): number {
+  if (age < 0 || age >= span) return 1;
+  // Recuperación lineal: el golpe es instantáneo, la vuelta es gradual. Al
+  // revés se leería como si el ente se encogiera *anticipando* el impacto.
+  return 1 - peak * (1 - age / span);
 }
 
 /**
@@ -72,20 +119,29 @@ export function contractionScale(_age: number, _span: number, _peak: number): nu
  * Arranca en el borde del ente y se va hasta `maxRadius`.
  */
 export function shockwaveRadius(
-  _age: number,
-  _span: number,
-  _fromRadius: number,
-  _maxRadius: number,
+  age: number,
+  span: number,
+  fromRadius: number,
+  maxRadius: number,
 ): number {
-  throw new Error("no implementado");
+  const t = clamp01(age / span);
+  // Ease-out cuadrático: sale disparada y se frena al final, que es como se
+  // percibe una onda de choque. Lineal se lee como un círculo que crece.
+  const eased = 1 - (1 - t) ** 2;
+  return fromRadius + (maxRadius - fromRadius) * eased;
 }
 
 /**
  * Opacidad de la onda expansiva: `1` en el frame del snap, `0` desde `span`.
  * Fuera de la ventana devuelve `0`, así el llamador puede no dibujar nada.
  */
-export function shockwaveOpacity(_age: number, _span: number): number {
-  throw new Error("no implementado");
+export function shockwaveOpacity(age: number, span: number): number {
+  if (age < 0 || age >= span) return 0;
+  return 1 - age / span;
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 /**
@@ -97,6 +153,14 @@ export function shockwaveOpacity(_age: number, _span: number): number {
  * mismo. Redondear a precisión fija hace que el SVG sea comparable byte a byte,
  * que es lo que permite testear determinismo sin rasterizar.
  */
-export function svgNumber(_value: number): string {
-  throw new Error("no implementado");
+export function svgNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`un atributo SVG no admite ${value}`);
+  }
+
+  const rounded = Number(value.toFixed(SVG_PRECISION));
+  // `toFixed` deja `-0` y `-0.000` para los negativos que redondean a cero:
+  // válidos en SVG, pero rompen la comparación byte a byte.
+  if (rounded === 0) return "0";
+  return String(rounded);
 }
