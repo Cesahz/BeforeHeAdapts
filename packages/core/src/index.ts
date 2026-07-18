@@ -3,8 +3,7 @@
 // Núcleo puro y determinista: sin I/O, sin Date.now(), sin Math.random() sin
 // seed inyectada. El estado siempre es reduce(log) sobre eventos inmutables.
 //
-// Todavía sin lógica: los módulos signature/, ledger/, policy/ y engine/
-// llegan en la Fase 1, después de que contract.test.ts fije la especificación.
+// Fase 1 en curso: signature/ y ledger/ implementados; policy/ y engine/ siguen.
 
-/** Versión del contrato de eventos. Cada evento del log llevará este campo `v`. */
-export const CONTRACT_VERSION = 1 as const;
+export * from "./signature/index.js";
+export * from "./ledger/index.js";
