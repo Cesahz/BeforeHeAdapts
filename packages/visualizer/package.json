@@ -1,6 +1,6 @@
 {
   "name": "@beforeheadapts/visualizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Replay del log de eventos a frames renderizables. Derivación pura; el render es un adaptador.",
   "private": true,
   "type": "module",

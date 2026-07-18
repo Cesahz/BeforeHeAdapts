@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0] — 2026-07-18
+
+Cierre de la **Fase 2 (Visualizador)**. La adaptación deja de ser una suite de tests y pasa a verse: cualquier log del motor se convierte ahora en una secuencia de imágenes que muestra las seis reglas del contrato sin escribir un solo número en pantalla.
+
+### Añadido
+
+- **`packages/visualizer`** — el replay del log a animación, en tres capas separadas a propósito: derivar frames, dibujarlos y grabarlos. Las tres son puras salvo la última, y la última es la única que toca el entorno.
+- **Derivación de frames.** Un frame por evento del log, leído del motor sobre el prefijo correspondiente. El visualizador no lleva estado propio ni reimplementa el núcleo: si un frame y el motor discrepan, el que está mal es el frame.
+- **Render a SVG.** El lenguaje visual completo: el ente como polígono que suma un vértice por cada cluster asimilado, el ataque entrante cuyo grosor *es* la efectividad de la curva, la onda expansiva del salto de adaptación, los nodos de memoria en órbitas según confianza y los hilos de similitud entre firmas emparentadas.
+- **Guion temporal del replay**, independiente de los timestamps del log. Una sala donde nadie atacó por diez minutos no debe tener diez minutos de nada; el salto de adaptación, en cambio, se sostiene en pantalla porque es el momento que el replay existe para mostrar.
+- **Export con el puerto `FrameSink`**, con la orquestación pura de un lado y el adaptador que graba con canvas del otro. Importar el paquete desde Node nunca arrastra el DOM.
+- **Script de demo** (`pnpm --filter @beforeheadapts/visualizer demo`): arma un log sintético con el motor real, lo renderiza a SVG numerados y genera una página autocontenida que los reproduce en secuencia. Sirve para mirar el motor con los ojos, que es algo que los tests no hacen.
+- **ADR 0007** — por qué el render se define sobre la secuencia completa de frames y no sobre un frame suelto.
+
+### Cambiado
+
+- **`ClusterFrame` expone la firma del cluster**, que es lo que le permite al render calcular la similitud y dibujar los hilos de generalización. Es derivar un dato del motor, no acumular estado propio.
+- **La aleatoriedad visual es determinista.** La vibración del ente tras un impacto se siembra con el número de secuencia del evento: el mismo log produce el mismo dibujo, byte a byte, en cada corrida. Con aleatoriedad real dos reproducciones del mismo log serían imágenes distintas, y eso ya no sería un replay.
+- **Las ventanas de los efectos se miden en frames, no en milisegundos.** Por eso lo que se ve en el navegador y lo que sale grabado en video son idénticos por construcción, sin relojes de por medio.
+
+`packages/core` no cambió: esta versión es enteramente aditiva sobre el motor de la 0.1.0.
+
 ## [0.1.0] — 2026-07-18
 
 Cierre de la **Fase 1 (Núcleo)**. El motor de adaptación existe, es puro y determinista, y cumple el contrato canónico completo. Todavía no hay nada que jugar: esta versión es el cimiento sobre el que se construye el resto.
