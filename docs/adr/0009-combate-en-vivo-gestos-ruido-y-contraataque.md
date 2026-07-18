@@ -1,6 +1,6 @@
 # 0009 — Combatir en vivo con gestos cuantizados, ruido ambiental y contraataque materializado
 
-**Estado:** Propuesta — requiere OK del autor antes de implementar.
+**Estado:** Aceptada (2026-07-18), con las enmiendas del autor recogidas en §6 y §7.
 
 ## Contexto
 
@@ -126,9 +126,29 @@ El variador puro domina en el harness porque **variar es gratis ahí**: el model
 
 La **deformación del ente** (§5 del diseño) es extensión del vocabulario de render del [ADR 0007](0007-render-svg-sobre-secuencia-de-frames.md) y vive en el visualizador, no acá. Si esa extensión crece más allá de unos pocos parámetros, va en un **ADR 0010** propio.
 
+**El ente móvil y su forma hostil** quedan explícitamente fuera. En la 3b el ente es estático: un polígono centrado que se deforma y se orienta, pero que no se desplaza ni ejecuta ataques físicos propios. Un ente que se mueva por la pantalla y golpee al modo Mahoraga —la inspiración original del proyecto— cambia la naturaleza del combate: deja de ser "esquivá telegraphs mientras dibujás" y pasa a ser un enfrentamiento espacial, con posicionamiento, distancia y probablemente colisión continua. Eso **exige ADR propio** y no se anticipa acá: nada de la 3b debe asumir que el ente es estático de forma irreversible, pero tampoco se paga abstracción por adelantado. En concreto, la única precaución que sí se toma es que la posición del ente se lea de un solo lugar en vez de asumirse como el centro del viewport en cada cálculo.
+
+**El balance no se cierra en la 3b.** Los números de este ADR son puntos de partida para que el juego sea *jugable y verificable a mano*, no un balance resuelto. El ajuste fino es candidato a **fase propia con ADR propio**, con dos condiciones que el autor fija de antemano:
+
+1. **Nada de balancear a ojo.** La fase de balance se hace con una **suite de simulación en `apps/balance-sim` que corra ~10.000 sesiones ficticias** — corrida en la máquina del autor, con reporte analizable. El harness actual (16 tests, arquetipos) es el germen, pero hoy no modela ni ruido ni muerte (§5) y hay que extenderlo antes de que sus números signifiquen algo sobre el juego real.
+2. **Compuerta de regresión: si la tasa de victoria se mueve más de un 5 %, el test falla.** El balance deja de ser opinión y pasa a ser un invariante verificable, igual que el contrato.
+
+Y el principio que ordena todo esto, en palabras del autor: **el motor tiene que ser lo mejor posible; el balance es solo ajuste de jugabilidad.** No son la misma actividad y no se tocan entre sí. Un parche de balance **jamás** modifica `packages/core` — si alguna vez pareciera que hace falta, el problema está mal diagnosticado.
+
 El reconocedor **heurístico** es lo único autorizado: el gate de la NN (`roadmap-avanzado.md` §1) exige la 3b implementada con heurística *más evidencia medida* de que no alcanza. No está cumplido.
 
 Ubicación del reconocedor: **`apps/web/src/gesture/`**, módulo puro (puntos + timestamps → gesto → composición), con guardia de pureza sobre el fuente al estilo de `packages/visualizer/src/purity.test.ts` y property tests de invariancia a escala y velocidad. El muestreador del mouse —que sí toca DOM— queda afuera del módulo.
+
+### 7. Todas las constantes de balance en un solo módulo
+
+Consecuencia directa de §6: si el balance va a ser una fase con su propia suite y su propia compuerta de regresión, **el diff de un parche de balance tiene que ser un archivo**. Las nueve constantes de este ADR no se esparcen por el código donde se usan.
+
+- Viven en **`apps/web/src/arena/balance.ts`**, un único objeto congelado y exportado, con el rango razonable y el efecto esperado de cada una documentados al lado del número.
+- Ningún módulo de la arena lleva números de balance propios: los importa. Cero literales mágicos en el reconocedor, en el ruido o en el contraataque.
+- Las constantes del ADR 0008 (`COOLDOWN_MS_PER_COST`, `MODIFIER_COST`) **no se mudan** — siguen en `packages/arena-dsl`, que es la economía. `balance.ts` las re-exporta para que exista un solo lugar donde *leer* el balance completo, sin mover la fuente de verdad.
+- La suite de simulación consume este módulo, así que barrer un parámetro es parametrizar una función, no editar código en varios lados.
+
+Esto es andamiaje barato ahora y la diferencia entre una fase de balance viable y una insoportable después.
 
 ## Alternativas descartadas
 
@@ -156,7 +176,7 @@ Ubicación del reconocedor: **`apps/web/src/gesture/`**, módulo puro (puntos + 
 **Negativas:**
 
 - **Los contraataques no son replayables.** El visualizador reconstruye el arsenal desde `CounterReady` pero no cada disparo ni cada esquive. Un replay de 3b es fiel a lo que el ente *aprendió*, no a lo que el jugador *vivió*. Es el precio de no meter eventos de dominio en el log del motor, y es la deuda más grande de este ADR.
-- **Nueve constantes de tuneo nuevas** (`W`, umbral, `MIN_PATH`, `NOISE_COOLDOWN_MS`, cadencia, daño, telegraph, `STRIKE_RADIUS`, `PLAYER_MAX_HP`). Todas viven en el adaptador y ninguna toca el motor, pero es la superficie de balance más grande que el proyecto haya tenido, y ninguna está validada contra un jugador real todavía. Los números de arriba son puntos de partida, no verdades.
+- **Nueve constantes de tuneo nuevas** (`W`, umbral, `MIN_PATH`, `NOISE_COOLDOWN_MS`, cadencia, daño, telegraph, `STRIKE_RADIUS`, `PLAYER_MAX_HP`). Todas viven en el adaptador y ninguna toca el motor, pero es la superficie de balance más grande que el proyecto haya tenido, y ninguna está validada todavía. Los números son puntos de partida, no verdades: se ajustan con el juego en la mano (verificación humana repetida del autor) y después con la suite de §6. El §7 hace que ajustarlos sea editar un archivo; no hace que los valores iniciales sean buenos.
 - **`apps/balance-sim` queda parcialmente obsoleto** como medida del juego real (§5). Sus números siguen siendo correctos sobre lo que modela; el riesgo es leerlos como si modelaran todo.
 - **El "feel" del combate depende del reconocedor**, tal como el ADR 0004 ya advirtió. Cuatro plantillas heurísticas van a rechazar trazos que un humano considera obvios. El rechazo sin costo de cooldown lo hace tolerable, no invisible.
 - **`elem:ambient` diluye el Jaccard** de todo el catálogo un poco (9 elementos en vez de 8) y agrega un cluster que el jugador no puede atacar. Es un ciudadano de segunda del catálogo, y hay que recordar excluirlo de cualquier UI que enumere elementos jugables.
