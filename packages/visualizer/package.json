@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
+    "demo": "tsc --build && node scripts/demo.ts",
     "typecheck": "tsc --build",
     "test": "vitest run",
     "test:watch": "vitest"
