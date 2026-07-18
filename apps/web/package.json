@@ -1,6 +1,6 @@
 {
   "name": "@beforeheadapts/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "La arena: cliente de la vitrina. Builder de ataques (DSL) + vista del ente. Una sala local = un engine + un log en memoria.",
   "private": true,
   "type": "module",

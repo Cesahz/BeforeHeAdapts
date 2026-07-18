@@ -1,6 +1,6 @@
 {
   "name": "beforeheadapts",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Motor de adaptación agnóstico de dominio (arquitectura hexagonal + event sourcing).",
   "private": true,
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@beforeheadapts/arena-dsl",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DSL de ataques de la arena: catálogo de primitivas y traducción composición → firma canónica (ADR 0008).",
   "private": true,
   "type": "module",

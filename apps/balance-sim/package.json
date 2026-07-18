@@ -1,6 +1,6 @@
 {
   "name": "@beforeheadapts/balance-sim",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Harness de simulación de balance: arquetipos de jugador contra el ente, con reporte de adaptaciones, eff y R6.",
   "private": true,
   "type": "module",

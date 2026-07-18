@@ -90,6 +90,9 @@ describe("export del replay (ADR 0006)", () => {
     const file = toReplayFile(room);
     expect(file.schemaVersion).toBe(1);
     expect(file.engineVersion).toBe(ENGINE_VERSION);
+    // Ojo: `ENGINE_VERSION` es una constante escrita a mano y hay que subirla en
+    // cada release. Si se olvida, los replays mienten sobre qué build los generó.
+    expect(ENGINE_VERSION).toBe("0.3.0");
     expect(file.roomId).toBe("mi-sala");
     expect(file.events.length).toBe(room.log.events.length);
   });

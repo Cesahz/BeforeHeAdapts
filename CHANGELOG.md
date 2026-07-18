@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.0] — 2026-07-18
+
+Cierre de la **Fase 3a (Arena local)**. El motor deja de ser una biblioteca con un visualizador y pasa a ser algo que se juega: se componen ataques, se lanzan contra el ente, y se ve adaptarse en vivo. Todo corre en el navegador, sin servidor — una sala local es un motor y un log en memoria.
+
+### Añadido
+
+- **El DSL de ataques** (`packages/arena-dsl`). Cuatro ejes componibles —elemento, vector de entrega, patrón temporal y modificadores— que dan 5.376 ataques distintos a partir de 23 primitivas. El jugador no escribe código: compone. La complejidad de lo que compone es exactamente lo que le cuesta al ente adaptarse.
+- **La arena** (`apps/web`). Sala local, cinco ataques de fábrica para jugar sin pasar por el builder, bitácora de daño y export del replay a JSON.
+- **Vista del ente en vivo**, sobre el mismo pipeline que ya reproducía los replays grabados. Lo que se ve jugando y lo que sale en un replay exportado son el mismo dibujo, porque son el mismo código.
+- **Builder de ataques con dos capas separadas**: la composición mecánica, que es lo único que el ente percibe, y la expresión visual, que es libre y no crea firmas nuevas. Dos ataques que solo difieren en cómo se ven son el mismo ataque para el ente — y la pantalla lo dice explícitamente.
+- **Builds guardadas y compartibles.** Persisten en el navegador con esquema versionado, y se exportan como un código de texto que otro jugador puede pegar. Compartir estrategias no necesita cuentas ni servidor.
+- **Cristalización del cluster** en el visualizador: un ataque a medio adaptar endurece visiblemente su nodo a medida que se acerca el salto. Faltaba la mitad del aviso — se veía el ataque perder fuerza, pero no que la ventana se estaba cerrando.
+- **Harness de simulación de balance** (`apps/balance-sim`). Tres arquetipos de jugador contra el ente, con reporte de adaptaciones, efectividad y generalización. Sirve para responder preguntas de balance con datos en vez de con intuición, y ya respondió la primera: la resistencia heredada entre ataques parecidos no se mueve tocando su radio.
+- **README público** y **ADR 0008**, que fija el catálogo de primitivas y la economía por cooldown.
+
+### Cambiado
+
+- **La debilidad que expone el ente al adaptarse ahora es siempre el elemento del ataque.** Antes salía de un accidente alfabético. Se resolvió desde el catálogo, sin tocar el motor ni invalidar un solo replay existente.
+- **La única moneda de la arena es el tiempo.** Un ataque simple se lanza cada medio segundo pero el ente lo adapta enseguida; uno complejo aguanta siete exposiciones pero deja al jugador cinco segundos y medio sin poder repetirlo. No hay recursos ni progresión: solo esa tensión.
+- **El render SVG se queda, WebGL se posterga.** Se midió antes de decidir: dibujar un cuadro cuesta dos décimas de milisegundo y el juego corre a 180 fps, muy por encima del objetivo. La decisión queda registrada con sus números para que no se rediscuta sin datos nuevos.
+
+### Corregido
+
+- **Los códigos de build no sobrevivían intactos a un caso límite.** Un valor de giro de "cero negativo" volvía del import como cero a secas, así que exportar e importar una build no siempre devolvía exactamente la misma build. Lo encontró un property test generando el caso; se normaliza en el borde.
+
+`packages/core` no cambió: como la 0.2.0, esta versión es enteramente aditiva sobre el motor de la 0.1.0.
+
+
 ## [0.2.0] — 2026-07-18
 
 Cierre de la **Fase 2 (Visualizador)**. La adaptación deja de ser una suite de tests y pasa a verse: cualquier log del motor se convierte ahora en una secuencia de imágenes que muestra las seis reglas del contrato sin escribir un solo número en pantalla.

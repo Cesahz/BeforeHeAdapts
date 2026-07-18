@@ -1,6 +1,6 @@
 {
   "name": "@beforeheadapts/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Motor de adaptación puro, agnóstico de dominio. Cero dependencias de runtime.",
   "private": true,
   "type": "module",

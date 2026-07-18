@@ -19,7 +19,7 @@ import type { Room } from "./room.js";
  * versiona el código que los produjo. Sirve para rastrear un replay raro hasta
  * la build que lo generó.
  */
-export const ENGINE_VERSION = "0.2.0";
+export const ENGINE_VERSION = "0.3.0";
 
 /** Archivo de replay tal como se exporta. Ver ADR 0006 punto 4. */
 export interface ReplayFile {
