@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+  - apps/*
+
+allowBuilds:
+  esbuild: true
+
+# esbuild (dependencia transitiva de Vitest) necesita correr su build script
+# para instalar su binario nativo. Es un paquete de tooling de test, no toca el runtime del núcleo.
+onlyBuiltDependencies:
+  - esbuild

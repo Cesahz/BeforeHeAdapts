@@ -1,14 +1,13 @@
 {
-  "name": "BeforeHeAdapts",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
+  "name": "beforeheadapts",
+  "version": "0.0.0",
+  "description": "Motor de adaptación agnóstico de dominio (arquitectura hexagonal + event sourcing).",
+  "private": true,
+  "type": "module",
   "license": "ISC",
+  "engines": {
+    "node": ">=22"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -16,5 +15,12 @@
       "onFail": "download"
     }
   },
-  "type": "module"
+  "scripts": {
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "build": "pnpm -r run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
 }

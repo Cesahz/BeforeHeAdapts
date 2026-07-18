@@ -1,0 +1,29 @@
+{
+  "name": "@beforeheadapts/core",
+  "version": "0.0.0",
+  "description": "Motor de adaptación puro, agnóstico de dominio. Cero dependencias de runtime.",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "fast-check": "^3.23.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
