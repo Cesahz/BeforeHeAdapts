@@ -71,12 +71,20 @@ export interface DenseFrame extends Frame {
  * Sigue sin haber `Math.random()` ni reloj: `sub` es un entero derivado de la
  * posición en la secuencia. La reproducibilidad byte por byte se mantiene.
  */
-export function seedOf(frame: DenseFrame): number {
-  let h = Math.imul(frame.seq | 0, 0x9e3779b1) ^ Math.imul(frame.sub | 0, 0x85ebca6b);
+export function subSeed(seq: number, sub: number): number {
+  // `sub === 0` devuelve el `seq` crudo para que los frames canónicos tiemblen
+  // exactamente como antes de que existiera la densificación: los fixtures
+  // golden de la Fase 2 siguen siendo válidos byte por byte.
+  if (sub === 0) return seq >>> 0;
+  let h = Math.imul(seq | 0, 0x9e3779b1) ^ Math.imul(sub | 0, 0x85ebca6b);
   h ^= h >>> 16;
   h = Math.imul(h, 0x21f0aaad);
   h ^= h >>> 15;
   return h >>> 0;
+}
+
+export function seedOf(frame: DenseFrame): number {
+  return subSeed(frame.seq, frame.sub);
 }
 
 /** Interpolación lineal. */
@@ -113,28 +121,43 @@ export function* densify(
 ): IterableIterator<DenseFrame> {
   const steps = Math.max(1, Math.floor(options.steps ?? DEFAULT_STEPS));
 
-  let previous: Frame | undefined;
+  let pending: Frame | undefined;
+
+  const expand = function* (frame: Frame, next: Frame | undefined): IterableIterator<DenseFrame> {
+    for (let sub = 0; sub < steps; sub += 1) {
+      // Los intermedios pertenecen al frame de PARTIDA: llevan su evento y su
+      // `seq`. El siguiente solo aporta hacia dónde van las magnitudes
+      // continuas, así que el evento que se muestra nunca es ambiguo.
+      if (sub === 0) {
+        yield Object.freeze({ ...frame, sub: 0 });
+        continue;
+      }
+      const r = sub / steps;
+      yield Object.freeze({
+        ...frame,
+        sub,
+        timestamp: next === undefined ? frame.timestamp : lerp(frame.timestamp, next.timestamp, r),
+        clusters: Object.freeze(
+          frame.clusters.map((cluster, i) => tweenCluster(cluster, next?.clusters[i], r)),
+        ) as readonly ClusterFrame[],
+      });
+    }
+  };
 
   for (const frame of frames) {
-    if (previous !== undefined) {
-      // Los intermedios pertenecen al frame de PARTIDA: llevan su evento y su
-      // `seq`. El frame siguiente solo aporta hacia dónde van las magnitudes
-      // continuas. Así el evento que se está mostrando nunca es ambiguo.
-      for (let sub = 1; sub < steps; sub += 1) {
-        const r = sub / steps;
-        yield Object.freeze({
-          ...previous,
-          sub,
-          timestamp: lerp(previous.timestamp, frame.timestamp, r),
-          clusters: Object.freeze(
-            previous.clusters.map((cluster, i) => tweenCluster(cluster, frame.clusters[i], r)),
-          ) as readonly ClusterFrame[],
-        });
-      }
-    }
-    yield Object.freeze({ ...frame, sub: 0 });
-    previous = frame;
+    if (pending !== undefined) yield* expand(pending, frame);
+    pending = frame;
   }
+
+  // El ÚLTIMO evento también recibe sus `steps` frames, aunque no haya hacia
+  // dónde interpolar. No es simetría por prolijidad: sin esto, la vista viva
+  // se congela apenas alcanza el presente —que es la mayor parte del tiempo,
+  // porque los ataques entran cada 1-2 s— y volvería el problema que este
+  // módulo existe para resolver. Los valores se sostienen, pero `sub` avanza,
+  // y eso basta para que la vibración siga viva y para que los efectos
+  // transitorios del render (que decaen por distancia en frames) terminen de
+  // apagarse suavemente en vez de quedar clavados a mitad de camino.
+  if (pending !== undefined) yield* expand(pending, undefined);
 }
 
 /**

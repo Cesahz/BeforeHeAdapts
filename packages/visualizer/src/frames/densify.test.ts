@@ -31,11 +31,29 @@ function logDeEjemplo(): Frame[] {
 }
 
 describe("densify", () => {
-  it("emite `steps` frames por tramo entre eventos", () => {
+  it("emite `steps` frames por evento, incluido el último", () => {
     const canonicos = logDeEjemplo();
     const densos = densifyAll(canonicos, { steps: 4 });
-    // n frames canónicos → n-1 tramos de 4, más el último frame suelto.
-    expect(densos.length).toBe((canonicos.length - 1) * 4 + 1);
+    expect(densos.length).toBe(canonicos.length * 4);
+  });
+
+  /**
+   * El último evento recibe sus frames aunque no haya hacia dónde interpolar.
+   * Sin esto la vista viva se congela apenas alcanza el presente —o sea la
+   * mayor parte del tiempo, porque los ataques entran cada 1-2 s— y volvería
+   * exactamente el síntoma que este módulo existe para resolver.
+   */
+  it("el último evento también se densifica", () => {
+    const canonicos = logDeEjemplo();
+    const densos = densifyAll(canonicos, { steps: 5 });
+    const ultimoSeq = canonicos[canonicos.length - 1]!.seq;
+    const delUltimo = densos.filter((f) => f.seq === ultimoSeq);
+    expect(delUltimo).toHaveLength(5);
+    expect(delUltimo.map((f) => f.sub)).toEqual([0, 1, 2, 3, 4]);
+    // Los valores se sostienen —no hay futuro que adivinar— pero `sub` avanza,
+    // que es lo que mantiene viva la vibración y apaga los transitorios.
+    expect(new Set(delUltimo.map((f) => f.timestamp)).size).toBe(1);
+    expect(new Set(delUltimo.map(seedOf)).size).toBe(5);
   });
 
   it("`steps: 1` devuelve la secuencia intacta", () => {

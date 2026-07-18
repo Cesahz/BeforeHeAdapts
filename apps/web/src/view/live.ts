@@ -16,14 +16,29 @@
 //
 // De ahí el reparto: `sync()` al atacar, `tick()` por cuadro.
 
-import { framesFrom, renderFrame, type Frame } from "@beforeheadapts/visualizer";
+import {
+  DEFAULT_STEPS,
+  densify,
+  framesFrom,
+  renderFrame,
+  type DenseFrame,
+  type Frame,
+} from "@beforeheadapts/visualizer";
 import type { EventLog, PolicyInput } from "@beforeheadapts/core";
 
-/** Cuántos frames de historia se conservan para resolver efectos en curso. */
+/** Cuántos EVENTOS de historia se conservan para resolver efectos en curso. */
 export const WINDOW = 24;
 
-/** Milisegundos que dura cada frame del replay en vivo. */
-export const FRAME_HOLD_MS = 110;
+/**
+ * Milisegundos que dura cada frame densificado.
+ *
+ * Antes eran 110 ms por evento, y con un frame por evento eso significaba que
+ * la pantalla mostraba una imagen fija entre golpe y golpe: el "fofo" que
+ * reportó el autor en la ronda 1. Ahora cada evento se abre en `DEFAULT_STEPS`
+ * frames (ADR 0010 §1), así que el tramo dura lo mismo pero se recorre en
+ * pasos de ~18 ms — la cadencia de un monitor de 60 Hz.
+ */
+export const FRAME_HOLD_MS = 18;
 
 export interface LiveStats {
   readonly fps: number;
@@ -40,6 +55,8 @@ export interface LiveStats {
  */
 export class LiveView {
   #frames: readonly Frame[] = [];
+  /** La cola densificada: lo que el playhead recorre de verdad. */
+  #dense: readonly DenseFrame[] = [];
   /** Índice del frame que se está mostrando. Avanza hacia el final del log. */
   #playhead = 0;
   #lastAdvance = 0;
@@ -65,6 +82,11 @@ export class LiveView {
     return { fps: this.#fps, frames: this.#frames.length, lastSyncMs: this.#lastSyncMs };
   }
 
+  /** Frames densificados en la ventana vigente. Para tests y para el medidor. */
+  get denseLength(): number {
+    return this.#dense.length;
+  }
+
   /**
    * Recalcula los frames desde el log. Llamar cuando el log crece, no por cuadro.
    *
@@ -75,11 +97,21 @@ export class LiveView {
   sync(log: EventLog): void {
     const t0 = performance.now();
     this.#frames = framesFrom(log, this.config);
-    this.#lastSyncMs = performance.now() - t0;
 
-    if (this.#playhead >= this.#frames.length) {
-      this.#playhead = Math.max(0, this.#frames.length - 1);
-    }
+    // Se densifica SOLO la cola. `densify` es perezosa, pero acá hace falta el
+    // arreglo materializado —el playhead lo recorre por índice— y densificar el
+    // log entero sería materializar decenas de miles de frames que la ventana
+    // de render nunca va a mirar. La cola es exactamente lo que se puede ver.
+    const cola = this.#frames.slice(-WINDOW);
+    const pendientes = Math.max(0, this.#dense.length - 1 - this.#playhead);
+    this.#dense = [...densify(cola, { steps: DEFAULT_STEPS })];
+
+    // El playhead se reubica CONTANDO DESDE EL FINAL, no desde el principio:
+    // la cola se corre a medida que el log crece, así que un índice absoluto
+    // saltaría hacia atrás en el replay cada vez que entra un evento.
+    this.#playhead = Math.max(0, this.#dense.length - 1 - pendientes - DEFAULT_STEPS);
+
+    this.#lastSyncMs = performance.now() - t0;
   }
 
   /**
@@ -88,11 +120,11 @@ export class LiveView {
    * @param now milisegundos monótonos (típicamente `performance.now()`).
    */
   tick(now: number): void {
-    if (this.#frames.length === 0) return;
+    if (this.#dense.length === 0) return;
 
     // Alcanzar el presente: si quedaron frames sin mostrar, avanzar de a uno
-    // para que cada evento tenga su instante en pantalla.
-    if (this.#playhead < this.#frames.length - 1 && now - this.#lastAdvance >= FRAME_HOLD_MS) {
+    // para que cada instante tenga su cuadro en pantalla.
+    if (this.#playhead < this.#dense.length - 1 && now - this.#lastAdvance >= FRAME_HOLD_MS) {
       this.#playhead += 1;
       this.#lastAdvance = now;
     }
@@ -105,9 +137,14 @@ export class LiveView {
     // La ventana acota cuánto pasado ve el render. `renderFrame` mira hacia
     // atrás para resolver efectos en curso (onda del snap, contracción), así
     // que no alcanza con pasarle un frame suelto: necesita su cola.
+    //
+    // Se mide en frames DENSOS, no en eventos: los transitorios del render
+    // decaen por distancia en frames, y con la densificación esa distancia se
+    // recorre en pasos chicos. Es lo que convierte un decaimiento a saltos en
+    // uno continuo, sin que el render se entere de que algo cambió.
     const end = this.#playhead + 1;
-    const start = Math.max(0, end - WINDOW);
-    const ventana = this.#frames.slice(start, end);
+    const start = Math.max(0, end - WINDOW * DEFAULT_STEPS);
+    const ventana = this.#dense.slice(start, end);
     const svg = renderFrame(ventana, ventana.length - 1);
 
     // Escribir el DOM solo cuando el dibujo cambió: entre dos cuadros idénticos

@@ -15,6 +15,7 @@
 import type { EngineEvent } from "@beforeheadapts/core";
 import { clusterKeyOf } from "@beforeheadapts/core";
 import type { Frame } from "../frames/index.js";
+import { subSeed } from "../frames/densify.js";
 import {
   contractionScale,
   jitter,
@@ -130,7 +131,7 @@ function coreLayer(
   const vertices =
     amplitude === 0
       ? regularPolygon(center, radius, layout.coreVertices)
-      : shakenPolygon(center, radius, layout.coreVertices, frame.seq, amplitude);
+      : shakenPolygon(center, radius, layout.coreVertices, vibrationSeed(frame), amplitude);
 
   return el("polygon", {
     class: "core",
@@ -143,11 +144,26 @@ function coreLayer(
 }
 
 /**
+ * Semilla de vibración de un frame, densificado o no.
+ *
+ * Un frame canónico tiembla según su `seq`. Un frame densificado comparte `seq`
+ * con sus hermanos del mismo evento, así que necesita además su `sub` — si no,
+ * los seis frames de un evento temblarían EXACTAMENTE IGUAL y la vibración
+ * quedaría congelada justo donde tiene que vibrar (ADR 0010 §1).
+ *
+ * La lectura es estructural y no por tipo: el render acepta `Frame` y
+ * `DenseFrame` indistintamente, y no tiene por qué saber cuál le tocó.
+ */
+function vibrationSeed(frame: Frame): number {
+  return subSeed(frame.seq, (frame as { readonly sub?: number }).sub ?? 0);
+}
+
+/**
  * Polígono con los vértices desplazados radialmente por ruido determinista.
  *
- * La semilla es el `seq` del evento: el mismo frame tiembla igual en cada
- * corrida. Con `Math.random()` acá, dos reproducciones del mismo log serían
- * dibujos distintos — y eso ya no sería un replay (ADR 0007 §5).
+ * El mismo frame tiembla igual en cada corrida. Con `Math.random()` acá, dos
+ * reproducciones del mismo log serían dibujos distintos — y eso ya no sería un
+ * replay (ADR 0007 §5).
  */
 function shakenPolygon(
   center: Point,
