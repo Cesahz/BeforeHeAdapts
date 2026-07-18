@@ -1,4 +1,4 @@
-# Motor de Adaptación — Arquitectura y ruta de desarrollo
+# BeforeHeAdapts — Arquitectura y ruta de desarrollo
 
 **Autor del concepto:** Cezah · **Fecha:** 2026-07-17
 **Basado en:** "Motor de adaptación — intención y arquitectura de referencia" (documento fuente)
