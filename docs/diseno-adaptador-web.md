@@ -70,6 +70,15 @@ Los contraataques pueden alterar la experiencia (oscurecer pantalla, distorsión
 - El motor procesa **eventos discretos, no frames**: el game loop de render nunca llama al motor por frame. La cuantización de entrada (ADR 0004) es la única puerta de entrada.
 - Objetivo: 60 fps en hardware modesto. Si algo no entra en presupuesto, se recorta densidad visual, nunca la legibilidad del feedback de §4.
 
+**Medición de la Fase 3a (2026-07-18): el render SVG entra sobrado, WebGL queda postergado.**
+
+La 3a se implementó con el render SVG del visualizador, no con WebGL, y se midió antes de decidir:
+
+- `renderFrame` cuesta **~0,2 ms** y es plano respecto del largo del log. Medido en el navegador del autor: **180 fps**, casi 11× el presupuesto de 60.
+- `framesFrom` es O(n²) sobre el largo del log (2,2 ms a 112 eventos; 43,1 ms a 812). Se resuelve sin tocar el pipeline: los frames se recalculan **solo cuando entra un evento** —gated por el cooldown, ≥ 500 ms— y nunca por cuadro de animación. Es el reparto `sync()` / `tick()` de `apps/web/src/view/live.ts`.
+
+Conclusión: el canvas WebGL único del primer punto de esta sección sigue siendo la dirección correcta cuando existan las partículas de 3b, pero **no se justifica todavía**. Si 3b lo pide, va con su propio ADR y con una medición que muestre el presupuesto excedido — `geometry/layout` ya son la capa de escena, así que la extracción está prevista y es local.
+
 ## 8. Fuera de alcance (explícito)
 
 Multijugador y salas online (pausado — Fase 4 sigue existiendo en el plan pero no condiciona 3a/3b). Cuentas de usuario y sync en servidor (§3 las reemplaza por export/import local). Sprites/arte ilustrado (la estética abstracta es decisión, no carencia). Cualquier cambio en `packages/core`.
