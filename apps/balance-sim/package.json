@@ -1,0 +1,30 @@
+{
+  "name": "@beforeheadapts/balance-sim",
+  "version": "0.2.0",
+  "description": "Harness de simulación de balance: arquetipos de jugador contra el ente, con reporte de adaptaciones, eff y R6.",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --build",
+    "sim": "tsc --build && node scripts/main.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@beforeheadapts/arena-dsl": "workspace:*",
+    "@beforeheadapts/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

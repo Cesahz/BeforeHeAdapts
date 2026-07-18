@@ -211,6 +211,22 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  apps/balance-sim:
+    dependencies:
+      '@beforeheadapts/arena-dsl':
+        specifier: workspace:*
+        version: link:../../packages/arena-dsl
+      '@beforeheadapts/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9
+
   packages/arena-dsl:
     dependencies:
       '@beforeheadapts/core':
