@@ -206,3 +206,117 @@ input[type="text"] {
   min-width: 0;
   word-break: break-word;
 }
+
+/* --- HUD del combate en vivo (ADR 0009) ---------------------------------
+   DOM, y solo porque es UI. El §7 del diseño prohíbe animar el JUEGO con DOM:
+   el ente, los ataques y los efectos son SVG. Acá van vida, cooldowns y
+   lectura del ente, que son interfaz y no escena.
+
+   Sin `transition` en los rellenos a propósito: se actualizan por cuadro desde
+   `hudModelOf`, así que una transición CSS competiría con el modelo por decir
+   dónde está la barra — dos fuentes de verdad para el mismo número. */
+
+.hud {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--tenue);
+}
+
+.hud-vida {
+  display: grid;
+  gap: 4px;
+}
+
+.hud-barra,
+.hud-agitacion {
+  height: 6px;
+  background: #0d1520;
+  border: 1px solid var(--tenue);
+  overflow: hidden;
+}
+
+.hud-barra-relleno {
+  height: 100%;
+  background: var(--tinta);
+}
+
+.hud-derrotado .hud-barra-relleno {
+  background: var(--asimilado);
+}
+
+.hud-derrotado .hud-vida-texto {
+  color: var(--asimilado);
+  letter-spacing: 0.15em;
+}
+
+.hud-elementos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.hud-elemento {
+  padding: 4px 6px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.hud-elemento-armado {
+  border-color: var(--tinta);
+  background: rgba(127, 212, 232, 0.12);
+}
+
+.hud-gestos {
+  display: grid;
+  gap: 4px;
+}
+
+/* El relleno va detrás del texto, no al lado: la fila ES la barra de cooldown.
+   Un medidor aparte sería un dashboard, que es justo lo que el ADR 0007 evita. */
+.hud-gesto {
+  position: relative;
+  padding: 5px 8px;
+  border: 1px solid var(--tenue);
+  overflow: hidden;
+}
+
+.hud-gesto-relleno {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(127, 212, 232, 0.14);
+}
+
+.hud-gesto-texto {
+  position: relative;
+}
+
+.hud-gesto-listo {
+  border-color: var(--tinta);
+}
+
+.hud-lectura {
+  display: grid;
+  gap: 6px;
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+.hud-agitacion-relleno {
+  height: 100%;
+  background: var(--tenue);
+}
+
+.hud-agitado .hud-agitacion-relleno {
+  background: var(--asimilado);
+}
+
+/* La escena es la superficie de trazado: el cursor lo dice antes de que el
+   jugador pruebe. `touch-action: none` es obligatorio, no cosmético — sin él
+   el navegador se queda con el gesto en pantallas táctiles y el trazo llega
+   cortado o no llega. */
+.escena {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
