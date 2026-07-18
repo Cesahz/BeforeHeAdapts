@@ -77,9 +77,43 @@ Mientras probás, fijate qué trazo te sale **naturalmente** que hoy no existe (
 
 ## Paso 3 — Cuantización e integración
 
-*(pendiente — se completa cuando el paso aterrice)*
+⚠️ **Estas entradas recién se pueden ejecutar cuando aterrice el paso 4**, que es el que cablea el combate a la pantalla. El paso 3 quedó verificado por tests (`combat.test.ts`, 11 tests) pero no tiene superficie visual propia.
 
-Entradas ya previstas: que un gesto en cooldown se rechace **sin llegar al log** (verificable exportando el replay y contando eventos); que mover el mouse durante un minuto entero produzca un log **solo de eventos discretos**.
+Lo que los tests **ya garantizan** y no hace falta que revises a mano: un minuto de agitación a 125 Hz (7.500 posiciones) produce menos de 100 eventos, todos de tipos válidos del ledger; duplicar el sampling rate no cambia el log; un gesto en cooldown no llega a la sala.
+
+### 🔴 R6. El ruido se siente antes de entenderlo
+
+**Qué hacer:** mover el mouse de forma agitada (sin apretar el botón) durante ~15 segundos seguidos, mirando al ente.
+
+**Qué tiene que pasar:** el ente **reacciona de forma visible pero sutil** mientras te agitás — se orienta hacia el cursor y se contrae un poco. No tiene que parecer un ataque ni un bug.
+
+**La pregunta real:** ¿te diste cuenta de que te estaba mirando **antes** de leer que existía la mecánica? Si tuviste que saberlo para notarlo, el feedback es demasiado sutil.
+
+**Si falla por invisible:** la reacción preventiva es render, no constante — avisame y la amplifico. **Si falla por molesto** (el ente tiembla todo el tiempo mientras jugás normal): subir `NOISE.threshold` (0,55 → 0,65).
+
+### 🟡 R7. Jugar normal no debería despertar el ruido
+
+**Qué hacer:** una sesión normal de ~2 minutos, dibujando gestos y sin agitarte a propósito.
+
+**Qué tiene que pasar:** el ente **no** aprende `elem:ambient`. Verificable exportando el replay y buscando `ambient` en las firmas.
+
+**Por qué importa:** el ruido está pensado como castigo a la agitación deliberada, no como impuesto al juego normal. Si aparece sin que lo provoques, el umbral está bajo y el canal pierde su significado.
+
+### 🟡 R8. El rechazo por cooldown se distingue del rechazo por ambiguo
+
+**Qué hacer:** lanzar el mismo gesto dos veces seguidas (el segundo cae en cooldown), y por separado dibujar algo ininteligible.
+
+**Qué tiene que pasar:** dos feedbacks **claramente distintos**. El primero dice "todavía no"; el segundo dice "no te entendí".
+
+**Por qué importa:** son dos fallas con remedios opuestos — esperar contra volver a dibujar. Si se ven igual, el jugador aprende la lección equivocada. Además solo uno de los dos te cobró tempo.
+
+### ⚪ R9. Rotar elementos como estrategia
+
+**Qué hacer:** lanzar el mismo gesto varias veces seguidas cambiando el elemento entre golpe y golpe (teclas 1-8).
+
+**Qué tiene que pasar:** funciona — cada elemento tiene su propio cooldown, porque son clusters distintos.
+
+**Es información, no veredicto:** esto *es* el variador puro jugable, y quiero saber si se siente como una estrategia legítima o como un exploit aburrido. La respuesta alimenta la futura fase de balance, no un cambio ahora.
 
 ## Paso 4 — HUD
 
