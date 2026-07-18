@@ -200,7 +200,7 @@ function frame(): void {
   }
 
   view.tick(t);
-  hud.update(hudModelOf(session, t));
+  hud.update(hudModelOf(session, t, view.stats.fps));
 
   for (const { prefab, boton } of botones) {
     const disponible = room.canAttack(prefab.composition, t);

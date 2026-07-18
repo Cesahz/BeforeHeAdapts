@@ -59,6 +59,8 @@ export class LiveView {
   #dense: readonly DenseFrame[] = [];
   /** Índice del frame que se está mostrando. Avanza hacia el final del log. */
   #playhead = 0;
+  /** Frames canónicos en el último `sync`. Sirve para saber cuánto corrió la ventana. */
+  #previousCanonical = 0;
   #lastAdvance = 0;
   #lastSyncMs = 0;
 
@@ -87,6 +89,11 @@ export class LiveView {
     return this.#dense.length;
   }
 
+  /** Índice del frame que se está mostrando. Expuesto para los tests de continuidad. */
+  get playhead(): number {
+    return this.#playhead;
+  }
+
   /**
    * Recalcula los frames desde el log. Llamar cuando el log crece, no por cuadro.
    *
@@ -102,14 +109,31 @@ export class LiveView {
     // arreglo materializado —el playhead lo recorre por índice— y densificar el
     // log entero sería materializar decenas de miles de frames que la ventana
     // de render nunca va a mirar. La cola es exactamente lo que se puede ver.
+    // Cuántos frames canónicos se cayeron por el frente de la ventana al crecer
+    // el log. Mientras el log entra entero en la ventana esto es 0 y el playhead
+    // no se mueve: los frames nuevos simplemente se agregan al final y se
+    // reproducen en secuencia, que es lo que hace visible cada golpe.
+    const inicioAnterior = Math.max(0, this.#previousCanonical - WINDOW);
+    const inicioNuevo = Math.max(0, this.#frames.length - WINDOW);
+    const desplazamiento = inicioNuevo - inicioAnterior;
+    this.#previousCanonical = this.#frames.length;
+
     const cola = this.#frames.slice(-WINDOW);
-    const pendientes = Math.max(0, this.#dense.length - 1 - this.#playhead);
     this.#dense = [...densify(cola, { steps: DEFAULT_STEPS })];
 
-    // El playhead se reubica CONTANDO DESDE EL FINAL, no desde el principio:
-    // la cola se corre a medida que el log crece, así que un índice absoluto
-    // saltaría hacia atrás en el replay cada vez que entra un evento.
-    this.#playhead = Math.max(0, this.#dense.length - 1 - pendientes - DEFAULT_STEPS);
+    // Reubicación del playhead: se descuenta CUÁNTOS FRAMES SE CAYERON por el
+    // frente de la ventana, ni uno más.
+    //
+    // La primera versión de esto rebobinaba una cantidad fija de frames, y era
+    // un bug de los que solo se ven jugando: un ataque mete 3+ eventos de una
+    // vez (ExposureRecorded, AdaptationProgressed, ResistanceApplied), o sea
+    // 3×`steps` frames nuevos, y rebobinar solo `steps` salteaba dos eventos
+    // enteros. Uno de los salteados era siempre `ResistanceApplied` — el único
+    // que dibuja el vector de ataque de R5. El autor lo reportó como "no se
+    // pueden visualizar las líneas de ataque", y tenía razón: no se dibujaban
+    // nunca, no es que pasaran rápido.
+    const reubicado = this.#playhead - desplazamiento * DEFAULT_STEPS;
+    this.#playhead = Math.min(Math.max(0, reubicado), Math.max(0, this.#dense.length - 1));
 
     this.#lastSyncMs = performance.now() - t0;
   }
@@ -122,6 +146,13 @@ export class LiveView {
   tick(now: number): void {
     if (this.#dense.length === 0) return;
 
+    // Dibujar ANTES de avanzar: si se avanza primero, el frame donde quedó el
+    // playhead tras un `sync` no llega a pintarse nunca. Con un frame por
+    // evento eso era un cuadro perdido cada tanto; con la densificación es el
+    // PRIMER cuadro de cada lote de eventos, que es justo donde empieza el
+    // golpe. Lo encontró el test de continuidad, no la vista a ojo.
+    this.#draw();
+
     // Alcanzar el presente: si quedaron frames sin mostrar, avanzar de a uno
     // para que cada instante tenga su cuadro en pantalla.
     if (this.#playhead < this.#dense.length - 1 && now - this.#lastAdvance >= FRAME_HOLD_MS) {
@@ -129,7 +160,6 @@ export class LiveView {
       this.#lastAdvance = now;
     }
 
-    this.#draw();
     this.#countFrame(now);
   }
 

@@ -127,3 +127,74 @@ describe("LiveView", () => {
     expect(container.innerHTML).toContain("<svg");
   });
 });
+
+/**
+ * Regresión del bug que el autor reportó en la ronda 1 como "no se pueden
+ * visualizar las líneas de ataque".
+ *
+ * Un ataque mete VARIOS eventos de una vez (`ExposureRecorded`,
+ * `AdaptationProgressed` / `AdaptationCompleted`, `ResistanceApplied`). La
+ * primera reubicación del playhead tras densificar rebobinaba una cantidad
+ * FIJA de frames, así que solo alcanzaba a mostrar el último evento del lote y
+ * salteaba los otros. Uno de los salteados era siempre `ResistanceApplied`, que
+ * es el único frame donde se dibuja el vector de ataque de R5: la curva de
+ * atenuación —el feedback central del §4 del diseño— era invisible.
+ *
+ * No se sentía como un frame perdido, se sentía como que "todo va muy rápido".
+ */
+describe("continuidad del playhead al entrar eventos", () => {
+  it("no saltea ningún frame de los eventos que entran juntos", () => {
+    const view = new LiveView(stub());
+    const room = new Room("test");
+    const cd = cooldownOf(compuesta);
+
+    view.sync(room.log);
+    room.attack(compuesta, 0);
+    view.sync(room.log);
+
+    // Se registra ANTES de `tick`: `tick` dibuja el frame donde está el playhead
+    // y recién después avanza, así que leerlo después contaría el siguiente.
+    const vistos = new Set<number>();
+    let t = 0;
+    for (let i = 0; i < 200; i += 1) {
+      vistos.add(view.playhead);
+      t += FRAME_HOLD_MS;
+      view.tick(t);
+    }
+    // Se recorrió la secuencia entera, no un pedazo del final.
+    expect(vistos.size).toBe(view.denseLength);
+  });
+
+  it("dibuja el vector de ataque de R5 en algún cuadro del golpe", () => {
+    const container = stub();
+    const view = new LiveView(container);
+    const room = new Room("test");
+    room.attack(compuesta, 0);
+    view.sync(room.log);
+
+    let visto = false;
+    let t = 0;
+    for (let i = 0; i < 200; i += 1) {
+      t += FRAME_HOLD_MS;
+      view.tick(t);
+      if (container.innerHTML.includes("incoming")) visto = true;
+    }
+    expect(visto).toBe(true);
+  });
+
+  it("mantiene la continuidad cuando la ventana empieza a correrse", () => {
+    const view = new LiveView(stub());
+    const room = new Room("test");
+    const cd = cooldownOf(compuesta);
+
+    // Más golpes que WINDOW: la ventana se corre y el playhead tiene que
+    // descontar exactamente lo que se cayó por el frente, ni un frame más.
+    for (let i = 0; i < WINDOW + 10; i += 1) {
+      room.attack(compuesta, i * cd);
+      view.sync(room.log);
+      view.tick(i * FRAME_HOLD_MS);
+      expect(view.playhead).toBeGreaterThanOrEqual(0);
+      expect(view.playhead).toBeLessThan(Math.max(1, view.denseLength));
+    }
+  });
+});

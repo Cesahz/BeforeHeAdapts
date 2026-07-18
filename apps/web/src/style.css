@@ -320,3 +320,7 @@ input[type="text"] {
   touch-action: none;
   user-select: none;
 }
+
+.hud-fps-bajo {
+  color: var(--asimilado);
+}

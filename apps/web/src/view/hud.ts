@@ -59,6 +59,13 @@ export interface HudModel {
   readonly agitated: boolean;
   /** Contraataques armados. Con 0 el ente todavía no aprendió nada. */
   readonly arsenal: number;
+  /**
+   * Cuadros por segundo. Va en el HUD y no en el panel lateral porque es el
+   * número que el autor necesita mirar MIENTRAS juega: el presupuesto del §7
+   * son 60 fps, y la decisión de proponer WebGL depende de una medición con
+   * combate real, no de una impresión.
+   */
+  readonly fps: number;
 }
 
 /**
@@ -67,7 +74,7 @@ export interface HudModel {
  * Como todo en el proyecto, esto es una LECTURA — el HUD no acumula estado
  * propio. Si el HUD y la sesión discrepan, el que está mal es el HUD.
  */
-export function hudModelOf(session: CombatSession, now: number): HudModel {
+export function hudModelOf(session: CombatSession, now: number, fps = 0): HudModel {
   const noise = session.readNoise(now);
 
   const gestures = GESTURES.map((gesture): GestureStatus => {
@@ -97,6 +104,7 @@ export function hudModelOf(session: CombatSession, now: number): HudModel {
     erraticity: noise.erraticity,
     agitated: noise.agitated,
     arsenal: session.arsenal.length,
+    fps,
   };
 }
 
@@ -117,6 +125,7 @@ export class Hud {
   readonly #agitation: HTMLElement;
   readonly #agitationFill: HTMLElement;
   readonly #arsenal: HTMLElement;
+  readonly #fps: HTMLElement;
 
   #lastSignature = "";
 
@@ -172,12 +181,14 @@ export class Hud {
     lectura.className = "hud-lectura";
     this.#lastGesture = document.createElement("span");
     this.#arsenal = document.createElement("span");
+    this.#fps = document.createElement("span");
+    this.#fps.className = "hud-fps";
     this.#agitation = document.createElement("div");
     this.#agitation.className = "hud-agitacion";
     this.#agitationFill = document.createElement("div");
     this.#agitationFill.className = "hud-agitacion-relleno";
     this.#agitation.append(this.#agitationFill);
-    lectura.append(this.#lastGesture, this.#arsenal, this.#agitation);
+    lectura.append(this.#lastGesture, this.#arsenal, this.#fps, this.#agitation);
 
     this.element.append(vida, elementos, gestos, lectura);
   }
@@ -220,6 +231,10 @@ export class Hud {
       model.lastGesture === undefined ? "sin gestos aún" : `último: ${model.lastGesture}`;
     this.#arsenal.textContent =
       model.arsenal === 0 ? "el ente no aprendió nada" : `contraataques: ${model.arsenal}`;
+    // Por debajo del presupuesto de 60 fps el número se marca: es la señal que
+    // dispara la conversación sobre WebGL, y tiene que verse sin buscarla.
+    this.#fps.textContent = `${model.fps.toFixed(0)} fps`;
+    this.#fps.classList.toggle("hud-fps-bajo", model.fps > 0 && model.fps < 60);
     this.#agitationFill.style.width = `${(model.erraticity * 100).toFixed(0)}%`;
     this.#agitation.classList.toggle("hud-agitado", model.agitated);
   }
