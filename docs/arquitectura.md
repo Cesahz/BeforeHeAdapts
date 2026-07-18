@@ -68,7 +68,7 @@ Las reglas canónicas del documento fuente, más dos derivadas, convertidas en i
 2. **Complejidad → exposiciones.** `N(c)` es monótona creciente. Firma simple: 1 exposición. Firma compuesta: varias.
 3. **Contraataque.** Al completar una adaptación, el motor emite `CounterReady(firma, debilidad_detectada)`. El dominio la materializa. El motor nunca sabe qué es un contraataque concreto.
 4. **Memoria según política.** Con política "permanente": reproducir cualquier prefijo del log de eventos nunca reduce una resistencia ya alcanzada. Con "por sesión": el estado muere con la sala. Con "decaimiento": la confianza (no la memoria) decae sin refuerzo.
-5. **Curva decreciente, nunca interruptor** (derivada del doc fuente §3). Efectividad del estímulo tras k exposiciones: `eff(k) = base × r^k`, con asíntota > 0 hasta que la adaptación completa. Sin inmunidad instantánea.
+5. **Curva decreciente, nunca interruptor** (derivada del doc fuente §3). Efectividad del estímulo tras k exposiciones: `eff(k) = asymptote + (base − asymptote) × r^k`, con `asymptote > 0` como piso explícito de la curva ([ADR 0003](adr/0003-forma-de-eff-con-piso-explicito.md)). Sin inmunidad instantánea ni inmunidad de facto en el límite.
 6. **Generalización** (nueva — resuelve "adaptarse a lo que desconoce totalmente"). Resistencia inicial contra firma nueva `s`: `R₀(s) = max sobre clusters adaptados c de [ sim(s,c) × transfer(c) ]`. Lo desconocido se enfrenta con lo aprendido de lo parecido.
 
 ---

@@ -30,7 +30,7 @@ Al completarse una adaptación, el motor emite `CounterReady(cluster, debilidad)
 - `decaimiento`: decae la *confianza* (peso de la generalización), nunca la memoria del cluster en sí.
 
 ### R5 — Curva decreciente, nunca interruptor
-Efectividad del estímulo tras `k` exposiciones procesadas: `eff(k) = base × r^k`, con `0 < r < 1` y asíntota `> 0` mientras la adaptación no complete. Prohibido: efectividad 0 antes de `AdaptationCompleted`. Property test: `eff(k) > 0` para todo `k < N(c)` y `eff` estrictamente decreciente.
+Efectividad del estímulo tras `k` exposiciones procesadas: `eff(k) = asymptote + (base − asymptote) × r^k`, con `0 < r < 1` y asíntota `asymptote > 0` como piso explícito de la curva ([ADR 0003](adr/0003-forma-de-eff-con-piso-explicito.md)). Prohibido: efectividad 0 antes de `AdaptationCompleted`. Property test: `eff(k) > 0` para todo `k < N(c)` y `eff` estrictamente decreciente.
 
 `base`, `r` y la asíntota son parámetros de `policy` (un dominio puede configurar la curva casi plana), pero la restricción `eff > 0` pre-adaptación es dura: es lo que impide la inmunidad binaria y mata la estrategia degenerada del counter puro. Ver R1 y ADR 0001.
 

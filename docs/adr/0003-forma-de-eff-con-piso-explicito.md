@@ -48,9 +48,12 @@ El `defaultConfig` de `contract.test.ts` (`asymptote = 0.05`) queda válido y de
 
 ## Impacto en la Ley de arquitectura / contrato canónico
 
-**Sí hay impacto — requiere confirmación antes de aplicarlo.** Este ADR no cambia ninguna de las 6 reglas, pero sí precisa la fórmula que R5 escribe de forma literal. Propuesta de actualización, **no aplicada** hasta tu OK:
+**Sí hay impacto — actualización aprobada y aplicada.** Este ADR no cambia ninguna de las 6 reglas, pero sí precisa la fórmula que R5 escribía de forma literal. Se reemplazó `eff(k) = base × r^k` por `eff(k) = asymptote + (base − asymptote) × r^k` en los tres lugares que la enunciaban, manteniendo el resto del texto (incluida la prohibición de efectividad 0 pre-adaptación):
 
-1. `docs/contrato.md` §R5: reemplazar `eff(k) = base × r^k` por `eff(k) = asymptote + (base − asymptote) × r^k`, manteniendo el resto del texto (incluida la prohibición de efectividad 0 pre-adaptación) y agregando la referencia a este ADR.
-2. `CLAUDE.md` §"Contrato canónico (resumen)", punto 5: mismo reemplazo en la fórmula del resumen.
+1. `docs/contrato.md` §R5.
+2. `docs/arquitectura.md` §3, regla 5.
+3. `CLAUDE.md` §"Contrato canónico (resumen)", punto 5.
+
+La mención en el [ADR 0001](0001-conciliar-curva-y-salto-discreto.md) queda **intacta a propósito**: es registro histórico de la tensión R1/R5 tal como se leía entonces, y los ADR no se reescriben.
 
 Ni `contract.test.ts` ni ningún test cambian: los tests de R5 nunca dependieron de la forma exacta de la curva, solo de `eff > 0` y del decrecimiento estricto — que es exactamente como debe ser.
