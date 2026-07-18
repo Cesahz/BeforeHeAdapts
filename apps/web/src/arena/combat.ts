@@ -22,6 +22,7 @@ import type { EngineEvent, Primitive, StimulusSignature } from "@beforeheadapts/
 import { cooldownOf, type Composition, type Element } from "@beforeheadapts/arena-dsl";
 
 import { AMBIENT_SIGNATURE } from "./ambient.js";
+import { PLAYER } from "./balance.js";
 import { Room, type AttackOutcome } from "./room.js";
 import {
   compositionFor,
@@ -69,6 +70,7 @@ export class CombatSession {
   readonly #arsenal = new Map<Primitive, ArmedCounter>();
   #element: Element;
   #lastGesture: GestureKind | undefined;
+  #hp = PLAYER.maxHp;
 
   constructor(room: Room = new Room(), element: Element = "ember") {
     this.#room = room;
@@ -102,6 +104,37 @@ export class CombatSession {
    */
   get arsenal(): readonly ArmedCounter[] {
     return [...this.#arsenal.values()];
+  }
+
+  /** Vida del jugador. Estado del dominio arena: el motor no la conoce (ADR 0004). */
+  get hp(): number {
+    return this.#hp;
+  }
+
+  /**
+   * La corrida terminó: el ente ganó.
+   *
+   * La derrota es **terminal** (ADR 0009 §3). No se reencarna al jugador ni se
+   * resetea al ente: lo primero anularía la presión que el contraataque ejerce,
+   * y lo segundo crearía el incentivo perverso de suicidarse para borrarle la
+   * adaptación — y por el hallazgo de balance, todo jugador termina acorralado.
+   *
+   * El log se preserva y sigue exportable: es el artefacto que importa.
+   */
+  get defeated(): boolean {
+    return this.#hp <= 0;
+  }
+
+  /**
+   * Aplica daño de un contraataque.
+   *
+   * No emite ningún evento: un golpe del ente **no es un estímulo percibido**,
+   * así que no entra al log (ADR 0009 §4). El log registra lo que el ente
+   * aprendió, no lo que hizo.
+   */
+  hurt(amount: number): void {
+    if (this.defeated) return;
+    this.#hp = Math.max(0, this.#hp - amount);
   }
 
   /** Erraticidad vigente y si el ente está percibiendo agitación. Alimenta el feedback preventivo. */
@@ -138,6 +171,10 @@ export class CombatSession {
    * el peor caso: 20 por minuto de agitación continua.
    */
   pollNoise(now: number): ExposureOutcome | undefined {
+    // Con la corrida terminada el log se congela: nada más entra. Es lo que
+    // hace que el replay exportado sea exactamente la corrida y no incluya el
+    // movimiento del cursor de alguien mirando la pantalla de derrota.
+    if (this.defeated) return undefined;
     if (!this.#noise.read(now).shouldEmit) return undefined;
     this.#noise.markEmitted(now);
     const outcome = this.#room.expose(AMBIENT_SIGNATURE, now);
@@ -153,6 +190,8 @@ export class CombatSession {
    * se entere, así que no hay forma de que llegue al log.
    */
   attemptGesture(points: readonly GesturePoint[], now: number): GestureAttempt {
+    if (this.defeated) return { kind: "rejected", reason: "insuficiente" };
+
     const recognition = recognize(points);
     if (!recognition.ok) return { kind: "rejected", reason: recognition.reason };
 

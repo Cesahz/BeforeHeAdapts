@@ -22,17 +22,30 @@
 import { COOLDOWN_MS_PER_COST, MODIFIER_COST } from "@beforeheadapts/arena-dsl";
 
 /**
+ * Congela un grupo de constantes **y borra sus tipos literales**.
+ *
+ * `Object.freeze({ maxHp: 100 })` infiere `readonly maxHp: 100`, y un tipo
+ * literal en una constante de tuneo es una mentira: le dice al compilador que
+ * el valor es parte del contrato cuando el propósito entero de este archivo es
+ * que cambie. Con literales, cambiar un número rompe compilación en otro lado
+ * — exactamente la fricción que la fase de balance no puede permitirse.
+ */
+function tuning<T extends Record<string, number>>(values: T): Readonly<Record<keyof T, number>> {
+  return Object.freeze(values);
+}
+
+/**
  * Re-exportadas, NO mudadas. La economía de costo/cooldown sigue viviendo en
  * `packages/arena-dsl` (ADR 0008 §3), que es su fuente de verdad. Aparecen acá
  * para que exista un solo lugar donde *leer* el balance completo.
  */
-export const ECONOMY = Object.freeze({
+export const ECONOMY = tuning({
   cooldownMsPerCost: COOLDOWN_MS_PER_COST,
   modifierCost: MODIFIER_COST,
 });
 
 /** Reconocimiento de gestos (ADR 0009 §1). */
-export const GESTURE = Object.freeze({
+export const GESTURE = tuning({
   /**
    * Muestras equidistantes a las que se re-muestrea todo trazo antes de medir
    * ángulos. Es lo que da invariancia a escala y velocidad: al repartir el
@@ -146,7 +159,7 @@ export const GESTURE = Object.freeze({
 });
 
 /** Ruido ambiental (ADR 0009 §2). */
-export const NOISE = Object.freeze({
+export const NOISE = tuning({
   /** Muestras de la ventana deslizante. A paso de 16 ms, 32 son ~0,5 s. Rango sano: 24–48. */
   windowSize: 32,
 
@@ -180,13 +193,13 @@ export const NOISE = Object.freeze({
 });
 
 /** Jugador físico (ADR 0009 §3). */
-export const PLAYER = Object.freeze({
+export const PLAYER = tuning({
   /** Puntos de vida. La derrota es terminal: fin de corrida, log preservado. */
   maxHp: 100,
 });
 
 /** Contraataque materializado (ADR 0009 §4). */
-export const COUNTER = Object.freeze({
+export const COUNTER = tuning({
   /** Cadencia base en ms con UN cluster adaptado. Rango sano: 7000–12000. */
   baseIntervalMs: 9000,
 
