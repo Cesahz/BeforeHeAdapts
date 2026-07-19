@@ -11,6 +11,8 @@ import "./style.css";
 
 import { downloadText } from "./arena/download.js";
 import { CombatSession } from "./arena/combat.js";
+import { CounterScheduler, type CounterPhase } from "./arena/counter.js";
+import { COUNTER } from "./arena/balance.js";
 import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
@@ -127,8 +129,41 @@ overlay.setAttribute("viewBox", `0 0 ${arenaTheme.size} ${arenaTheme.size}`);
 escena.append(overlay);
 
 const CENTER = centerOf(arenaTheme);
+
+/**
+ * El reloj del ente. Es la otra mitad del loop: hasta que existió, el arsenal
+ * crecía y la vida del jugador no bajaba nunca.
+ */
+const scheduler = new CounterScheduler();
+
+/**
+ * El planificador razona en **píxeles de pantalla**, no en unidades del SVG.
+ *
+ * No es un detalle de implementación: el ADR 0009 §4 define la esquiva como
+ * "salir de 60 px en ≥ 320 ms", y eso es una cantidad de pantalla y de músculo,
+ * no de viewBox. Si el disco viviera en unidades del SVG, esquivar sería más
+ * fácil en un monitor grande y más difícil en uno chico — la dificultad
+ * dependería del hardware, que es justo lo que el ADR 0004 no acepta.
+ *
+ * La consecuencia es que el punto fijado del golpe llega en píxeles y hay que
+ * convertirlo para dibujarlo. Se convierte acá, en el borde, una sola vez.
+ */
+function faseParaDibujar(): CounterPhase {
+  const fase = scheduler.phase;
+  if (fase.kind === "idle") return fase;
+  return { ...fase, at: aSvg(fase.at.x, fase.at.y) };
+}
+
+/** El radio del disco, en unidades del SVG. Mismo motivo que arriba. */
+function radioDeImpactoSvg(): number {
+  const caja = escena.getBoundingClientRect();
+  const escala = caja.width === 0 ? 1 : arenaTheme.size / caja.width;
+  return COUNTER.strikeRadiusPx * escala;
+}
 let tracers: readonly Tracer[] = [];
 let cursor: { x: number; y: number } | undefined;
+/** El cursor en píxeles crudos: es en lo que razona el planificador. */
+let cursorPx: { x: number; y: number } | undefined;
 
 /**
  * Píxeles del contenedor → unidades del SVG.
@@ -210,6 +245,7 @@ attachPointer(escena, now, {
   onMove: (x, y, t) => {
     session.observePointer(x, y, t);
     cursor = aSvg(x, y);
+    cursorPx = { x, y };
   },
   onStroke: (points, t) => {
     // El corte del log ANTES del intento: lo que entre a partir de acá es este
@@ -306,6 +342,23 @@ function frame(): void {
   if (ruido !== undefined) {
     log(`el ente percibe agitación (${ruido.exposures}/${ruido.requiredExposures})`);
     view.sync(room.log);
+    // Si el ente ya adaptó la agitación, agitarse lo invoca: el ruido tiene
+    // disparador propio, fuera de la cadencia (ADR 0009 §4).
+    if (cursorPx !== undefined && scheduler.triggerAmbient(t, session.arsenal, cursorPx)) {
+      log("el ente responde a tu agitación");
+    }
+  }
+
+  // El reloj del ente. Devuelve algo solo en el cuadro en que un golpe resuelve.
+  const golpe = scheduler.poll(t, session.arsenal, cursorPx, cursorPx ?? { x: 0, y: 0 });
+  if (golpe !== undefined) {
+    if (golpe.hit) {
+      session.hurt(golpe.damage);
+      log(`✸ contraataque (${golpe.counter.weakness}) — ${golpe.damage} HP · quedan ${session.hp}`);
+      if (session.defeated) log("EL ENTE SE ADAPTÓ A VOS. fin de la corrida.");
+    } else {
+      log(`✧ contraataque esquivado (${golpe.counter.weakness})`);
+    }
   }
 
   view.tick(t);
@@ -322,6 +375,8 @@ function frame(): void {
       agitated: ruidoAhora.agitated,
       center: CENTER,
       coreRadius: arenaTheme.coreRadius,
+      counter: faseParaDibujar(),
+      strikeRadius: radioDeImpactoSvg(),
     },
     t,
   );

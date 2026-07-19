@@ -31,6 +31,8 @@ function estado(tracers: readonly Tracer[], extra: Partial<EphemeralState> = {})
     agitated: false,
     center: CENTER,
     coreRadius: CORE,
+    counter: { kind: "idle" },
+    strikeRadius: 60,
     ...extra,
   };
 }
@@ -233,5 +235,78 @@ describe("propiedades del render efímero", () => {
         },
       ),
     );
+  });
+});
+
+// El contraataque dibujado. El planificador tiene sus propios tests; acá se
+// verifica que lo que el jugador VE no le mienta sobre lo que va a pasar —
+// especialmente el radio, que es la promesa de dónde pega el golpe.
+describe("contraataque (ADR 0009 §4)", () => {
+  const contra = { weakness: "elem:frost" as const, clusterId: "c", armedAtSeq: 3 };
+  const PUNTO = { x: 200, y: 200 };
+
+  it("no dibuja nada mientras el ente no hace nada", () => {
+    expect(renderEphemeral(estado([]), 0)).not.toContain("stroke-dasharray=\"6 5\"");
+  });
+
+  it("cierra el aviso sobre el punto y termina exactamente en el disco", () => {
+    const fase = {
+      kind: "telegraph" as const,
+      counter: contra,
+      at: PUNTO,
+      startedAt: 0,
+      strikeAt: 700,
+    };
+
+    const radios = [0, 350, 700].map((t) => {
+      const markup = renderEphemeral(estado([], { counter: fase, strikeRadius: 60 }), t);
+      return Number(/r="([\d.]+)"/.exec(markup)?.[1]);
+    });
+
+    // Converge: cada anillo es más chico que el anterior.
+    expect(radios[1]!).toBeLessThan(radios[0]!);
+    expect(radios[2]!).toBeLessThan(radios[1]!);
+    // Y aterriza en el disco real. Si el aviso terminara más grande o más chico
+    // que el alcance del golpe, el juego estaría mintiendo sobre dónde pega.
+    expect(radios[2]!).toBeCloseTo(60, 5);
+  });
+
+  it("dibuja el impacto lleno y el fallo hueco", () => {
+    const base = { counter: contra, at: PUNTO, until: 200 };
+    const pego = renderEphemeral(
+      estado([], { counter: { kind: "strike", ...base, hit: true }, strikeRadius: 60 }),
+      100,
+    );
+    const fallo = renderEphemeral(
+      estado([], { counter: { kind: "strike", ...base, hit: false }, strikeRadius: 60 }),
+      100,
+    );
+
+    expect(pego).toContain("fill=\"#7fd4e8\"");
+    expect(fallo).toContain("fill=\"none\"");
+  });
+
+  it("tiñe el golpe con el elemento de la debilidad que lo armó", () => {
+    const fase = {
+      kind: "telegraph" as const,
+      counter: { weakness: "elem:ember" as const, clusterId: "c", armedAtSeq: 1 },
+      at: PUNTO,
+      startedAt: 0,
+      strikeAt: 700,
+    };
+    expect(renderEphemeral(estado([], { counter: fase }), 0)).toContain("#e8683d");
+  });
+
+  it("usa el color de advertencia cuando la debilidad no es un elemento jugable", () => {
+    // `elem:ambient` no está en la paleta del jugador a propósito: el ente
+    // golpeando con algo que vos no podés lanzar tiene que leerse como ajeno.
+    const fase = {
+      kind: "telegraph" as const,
+      counter: { weakness: "elem:ambient" as const, clusterId: "c", armedAtSeq: 1 },
+      at: PUNTO,
+      startedAt: 0,
+      strikeAt: 700,
+    };
+    expect(renderEphemeral(estado([], { counter: fase }), 0)).toContain("#e8a33d");
   });
 });

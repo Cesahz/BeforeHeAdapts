@@ -31,6 +31,7 @@
 import type { Element } from "@beforeheadapts/arena-dsl";
 
 import { EPHEMERAL } from "../arena/balance.js";
+import type { CounterPhase } from "../arena/counter.js";
 import type { GestureKind } from "../gesture/recognize.js";
 
 export interface Point {
@@ -61,6 +62,17 @@ export interface EphemeralState {
   readonly center: Point;
   /** Radio del ente. */
   readonly coreRadius: number;
+  /**
+   * Qué está haciendo el ente con su arsenal. `idle` no dibuja nada.
+   *
+   * El contraataque vive en esta capa y no en la canónica porque **no está en el
+   * log**: un golpe del ente no es un estímulo percibido (ADR 0009 §4). Un
+   * replay muestra el arsenal creciendo y no muestra los disparos, y eso es una
+   * consecuencia declarada, no un olvido.
+   */
+  readonly counter: CounterPhase;
+  /** Radio del disco de impacto, en unidades del SVG. */
+  readonly strikeRadius: number;
 }
 
 /**
@@ -199,6 +211,59 @@ function tracerMarkup(tracer: Tracer, state: EphemeralState, now: number): strin
 }
 
 /**
+ * El color de un contraataque: el del elemento de la debilidad que lo armó.
+ *
+ * La debilidad es una primitiva del catálogo (`elem:frost`, `pat:pulse`…), y por
+ * el ADR 0008 §4 casi siempre es un elemento — `elem:` es el primer prefijo en
+ * orden lexicográfico. Cuando no lo es, o cuando es el `ambient` que el jugador
+ * no puede lanzar, se cae al color de advertencia: el ente golpeando con algo
+ * que no está en tu paleta tiene que leerse como ajeno.
+ */
+function counterColor(weakness: string): string {
+  const element = weakness.startsWith("elem:") ? weakness.slice(5) : undefined;
+  if (element !== undefined && element in ELEMENT_COLOR) {
+    return ELEMENT_COLOR[element as Element];
+  }
+  return "#e8a33d";
+}
+
+/**
+ * El contraataque: aviso convergente y después el golpe.
+ *
+ * El telegraph es un anillo que **se cierra** sobre el punto fijado. Se cierra y
+ * no parpadea a propósito: el jugador tiene que poder leer *cuánto le queda* de
+ * un vistazo periférico, mientras la atención está en dibujar el gesto. Esa es
+ * toda la presión que el contraataque ejerce — compite por foco, no por
+ * destreza (ADR 0009 §4).
+ */
+function counterMarkup(phase: CounterPhase, strikeRadius: number, now: number): string {
+  if (phase.kind === "idle") return "";
+
+  const color = counterColor(phase.counter.weakness);
+
+  if (phase.kind === "telegraph") {
+    const span = phase.strikeAt - phase.startedAt;
+    const p = span <= 0 ? 1 : clamp01((now - phase.startedAt) / span);
+    // Empieza ancho y termina exactamente en el disco: el radio final ES el
+    // alcance real del golpe, así que el aviso no miente sobre dónde pega.
+    const radius = strikeRadius * (2.6 - 1.6 * p);
+    return (
+      `<circle cx="${n(phase.at.x)}" cy="${n(phase.at.y)}" r="${n(radius)}" fill="none" ` +
+      `stroke="${color}" stroke-width="${n(1 + 2 * p)}" stroke-opacity="${n(0.35 + 0.5 * p)}" stroke-dasharray="6 5"/>` +
+      // El disco real, tenue desde el principio: dónde NO hay que estar.
+      `<circle cx="${n(phase.at.x)}" cy="${n(phase.at.y)}" r="${n(strikeRadius)}" fill="${color}" fill-opacity="${n(0.06 + 0.1 * p)}"/>`
+    );
+  }
+
+  // El golpe. Un fallo se dibuja igual y distinto: hueco y pálido. Ver que el
+  // golpe cayó donde ya no estabas es la recompensa de haber esquivado.
+  const p = clamp01((phase.until - now) / 200);
+  return phase.hit
+    ? `<circle cx="${n(phase.at.x)}" cy="${n(phase.at.y)}" r="${n(strikeRadius * (1 + 0.6 * (1 - p)))}" fill="${color}" fill-opacity="${n(0.55 * p)}" stroke="${color}" stroke-opacity="${n(p)}" stroke-width="3"/>`
+    : `<circle cx="${n(phase.at.x)}" cy="${n(phase.at.y)}" r="${n(strikeRadius)}" fill="none" stroke="${color}" stroke-opacity="${n(0.4 * p)}" stroke-width="1" stroke-dasharray="3 4"/>`;
+}
+
+/**
  * Dibuja la capa efímera completa.
  *
  * @returns el contenido interno de un `<svg>`; quien lo monta pone el envoltorio
@@ -222,6 +287,11 @@ export function renderEphemeral(state: EphemeralState, now: number): string {
       `<circle cx="${n(state.center.x)}" cy="${n(state.center.y)}" r="${n(radius)}" fill="none" stroke="${state.agitated ? "#e8a33d" : "#4a6c7a"}" stroke-width="1" stroke-opacity="${n(0.15 + 0.5 * state.erraticity)}" stroke-dasharray="4 6"/>`,
     );
   }
+
+  // El contraataque va DESPUÉS del halo y ANTES del retículo: tiene que taparlo
+  // todo salvo el cursor, que es lo único que el jugador necesita no perder de
+  // vista mientras esquiva.
+  piezas.push(counterMarkup(state.counter, state.strikeRadius, now));
 
   if (state.cursor !== undefined) {
     const r = EPHEMERAL.reticlePx;
