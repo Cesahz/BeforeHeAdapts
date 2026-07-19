@@ -1,6 +1,6 @@
 # 0011 — Convertir el hallazgo de balance en la condición de derrota
 
-**Estado:** Propuesta. Requiere OK del autor antes de implementar.
+**Estado:** Aceptada (2026-07-18), con dos enmiendas exigidas por la revisión externa: el contador de firmas viables debe ser **honesto**, no optimista (§2), y la transición de acto debe ser un **momento legible**, no un dial silencioso (§4).
 
 Origen: respuesta de la revisión externa al reporte de dirección de Fase 3b (P1, punto 2) y la fila "Victoria multi-acto / checklist de `CounterReady`" de [`crecimiento-y-difusion.md`](../crecimiento-y-difusion.md) §2, aprobada como dirección con la nota *"decidir el subconjunto que cuenta = diseño, con ADR"*.
 
@@ -43,13 +43,29 @@ No entra al log. Un golpe recibido por el ente **sí** es un estímulo percibido
 
 ### 2. Firmas viables restantes: el círculo que se cierra
 
-Un contador derivado, puro, calculado sobre el estado del motor:
-
-> Una composición es **viable** si su cluster todavía no está adaptado.
-
-Es monótono decreciente por R1 (una adaptación no se deshace) y arranca en el tamaño del catálogo disponible. Se muestra en el HUD y **es el instrumento de tensión principal**: el jugador ve encogerse su propio vocabulario, golpe a golpe, sin que nadie se lo explique.
+Un contador derivado, puro, calculado sobre el estado del motor. Se muestra en el HUD y **es el instrumento de tensión principal**: el jugador ve encogerse su propio vocabulario, golpe a golpe, sin que nadie se lo explique.
 
 Es el círculo del battle royale, ya aprobado como dirección en el doc de retención — con la diferencia de que acá el círculo no lo mueve un temporizador arbitrario: **lo cerrás vos, atacando**.
+
+#### El contador es honesto (enmienda de la revisión)
+
+La definición ingenua sería *"viable = su cluster todavía no está adaptado"*. **No se sostiene.** Por R6 una firma hereda `R₀(s) = max_c [sim(s,c) × transfer(c)]` de sus parientes, así que una composición formalmente "no adaptada" puede nacer ya casi inútil. Ese contador prometería opciones muertas, y mentiría exactamente en el momento de mayor tensión, que es cuando más se lo mira.
+
+Acá lo que se muestra es siempre verdad — es a la vez la salvaguarda ética y la identidad de diseño del proyecto (doc de retención §1.4). El compromiso que conserva la legibilidad **sin mentir**:
+
+- **El titular** cuenta solo las firmas cuya **efectividad esperada** `1 − R₀ heredada` supera un umbral de dominio (configurable en el adaptador, se calibra en la fase de balance).
+- **El detalle** muestra `+N debilitadas` — las que existen pero ya no rinden.
+- **Cada build lleva su tinte de estado** — *fresca* / *tocada* / *casi inútil* — en el builder y en el anillo del HUD.
+
+Un solo número legible, y honesto. Sigue siendo monótono decreciente por R1: la resistencia heredada solo puede crecer, así que una firma que cayó bajo el umbral no vuelve a subir.
+
+### 2 bis. Requisitos de implementación de la derrota por agotamiento
+
+La revisión aceptó que agotar el vocabulario no castiga la exploración — **le pone precio a la información**, que es la lógica de escasez de la munición de Resident Evil. Pero se lee injusto si falla cualquiera de estas tres condiciones, que quedan como requisitos, no como sugerencias:
+
+- **(a) Runs cortas, 5-15 min.** Agotarse en el Acto I de una run de 10 minutos es una lección; en una de 40 es un rage-quit.
+- **(b) El recurso visible desde el minuto uno.** El contador va en el HUD desde el arranque, **jamás revelado a mitad de run**. Y la primera lección es gratis por diseño: un elemento desnudo (`N = 1`) se adapta al primer golpe, así que el jugador aprende que las builds se gastan dentro de los primeros 10 segundos, con el ejemplo más barato del catálogo.
+- **(c) La exploración paga entre runs.** El expediente de cierre muestra qué quemaste, qué funcionó y qué aprendiste. **El arsenal muere en la run; el conocimiento no.**
 
 ### 3. Derrota por agotamiento
 
@@ -72,6 +88,17 @@ El combate se divide en actos por umbrales de HP del ente. Cruzar un umbral **no
 
 Los actos son el "diseño del encuentro" que la revisión señaló como fuente real del arco: fases, no memoria selectiva.
 
+#### La transición tiene que ser un MOMENTO (enmienda de la revisión)
+
+Escalar los diales no alcanza, y el argumento es de la casa: **los actos son el R1 del dominio.** Un salto discreto que no se lee como salto es opacidad, y la opacidad convierte dificultad en frustración (doc de retención §1.2). Un dial que sube en silencio se experimenta como *"de repente todo pega más y no sé por qué"* — exactamente lo que R1 evita en el motor haciendo visible la cristalización.
+
+Es barato y además canónico: el HP del ente se deriva del log, así que **el acto también es derivable en los frames**. Por lo tanto:
+
+- **Capa canónica** — restyle discreto del ente al cruzar el umbral, reusando el vocabulario de deformación que ya existe. Al vivir en los frames, **los replays muestran la transición también**.
+- **Capa efímera** — florituras del cruce, solo en vivo (ADR 0010, enmienda 1: cada capa dueña de su tramo).
+- **HUD** — indicador de acto, permanente.
+- **Audio** — sting del cruce.
+
 ### 5. Por qué esto crea decisiones que hoy no existen
 
 La calibración tiene un objetivo declarado y falsable: **el spam pierde, la secuenciación gana.**
@@ -81,9 +108,25 @@ La calibración tiene un objetivo declarado y falsable: **el spam pierde, la sec
 
 Ahí nacen las decisiones. Ninguna requiere una mecánica nueva: todas salen de poner una línea de llegada delante de mecánicas que ya existían.
 
+#### El eje de habilidad oculto: gestión de adyacencia
+
+Lo que hace esto expresivo en vez de arbitrario, señalado por la revisión: **por R6, el ORDEN en que quemás firmas cambia el daño total extraíble.**
+
+Quemar builds similares de forma consecutiva **regala daño** — cada una le hereda resistencia a la siguiente vía `sim(s,c) × transfer(c)`. Espaciar familias lo conserva. La secuenciación no es solo *"cuál guardo para el Acto III"*: es **gestión de adyacencia en el espacio de firmas**, y no hay forma de jugarla bien por accidente.
+
+Eso es lo que convierte la derrota por agotamiento en una derrota **por mala estrategia**, y no por un reloj arbitrario. El jugador que se queda sin vocabulario quemó parientes seguidos; el que sobrevive los espació.
+
 ### 6. Dónde viven los números
 
 Todos en `apps/web/src/arena/balance.ts`, bajo una clave `VICTORY` nueva, con su rango sano documentado como el resto. **Ninguno está validado**: son puntos de partida para el playtest del autor, no verdades. La calibración fina es de la fase de balance, con su suite de ~10.000 sesiones y su compuerta de regresión del 5 % (ADR 0009 §6).
+
+#### Objetivo de calibración, explícito y falsable
+
+Fijado por la revisión para que la fase de balance tenga un blanco y no una opinión:
+
+> El HP del ente se calibra **entre** el daño extraíble con secuenciación inteligente (gana, ajustado) y el daño extraíble con orden descuidado (pierde).
+
+El harness ya sabe medir daño total por sesión; lo que hay que agregarle es el modo **"orden inteligente vs. orden ingenuo"** — el ingenuo quema parientes consecutivos, el inteligente espacia familias. Si ambos ganan, el HP está bajo; si ambos pierden, está alto. Es la forma operativa de verificar "el spam pierde, la secuenciación gana" en vez de declararlo.
 
 ---
 
@@ -115,8 +158,9 @@ Todos en `apps/web/src/arena/balance.ts`, bajo una clave `VICTORY` nueva, con su
 **Negativas:**
 
 - **Los números son invento.** Los umbrales de acto, los multiplicadores y el HP del ente no están validados por nada. El primer playtest casi con seguridad los va a encontrar mal, y hasta la fase de balance no hay forma de saber si "el spam pierde" se cumple de verdad o es solo la intención.
-- **"Firmas viables" tiene una definición discutible.** Se cuenta el catálogo de composiciones cuyo cluster no está adaptado, pero por R6 una firma nueva hereda resistencia de sus parientes: una composición "viable" puede nacer ya casi inútil. El contador va a ser **optimista**, y el jugador va a sentir que se queda sin opciones antes de que el número llegue a cero. Es un error conocido y aceptado: la alternativa (ponderar por resistencia heredada) daría un número más honesto y mucho menos legible.
+- **El contador honesto tiene un umbral que también es invento.** La versión optimista quedó descartada (§2), pero el precio es un dial nuevo: dónde cae la frontera entre "viable" y "debilitada" no lo dice ninguna propiedad del motor. Un umbral mal puesto hace que el titular se desplome de golpe o que no se mueva nunca. Es un número más para la fase de balance, y a diferencia de los otros, este afecta lo que el jugador *cree* que le queda.
 - **Tres actos es una estructura impuesta.** No sale de ninguna propiedad del motor; es diseño de encuentro puro. Si el playtest dice que los saltos se sienten arbitrarios, la respuesta es rediseñarlos, no buscarles justificación en el contrato.
+- **La transición de acto agrega una segunda fuente de restyle canónico del ente.** Ya hay una (las cicatrices de deformación). Dos vocabularios visuales sobre el mismo cuerpo pueden competir: si el cruce de acto no se distingue de una cicatriz grande, el momento se pierde y la enmienda P3 queda sin cumplir en la práctica aunque el código esté.
 - **La derrota por agotamiento puede sentirse injusta la primera vez.** El jugador que gastó su vocabulario en el Acto I no tiene forma de recuperarse, y eso es correcto por diseño pero necesita comunicarse mucho antes de que ocurra — de ahí que el contador vaya en el HUD desde el primer golpe y no aparezca cuando ya es tarde.
 - **Sube el acoplamiento entre la arena y el catálogo del ADR 0008.** El contador de viables necesita saber cuántas composiciones existen; si el catálogo cambia, el balance de la carrera cambia con él.
 
@@ -128,4 +172,6 @@ Todos en `apps/web/src/arena/balance.ts`, bajo una clave `VICTORY` nueva, con su
 
 **No se propone ninguna actualización del `CLAUDE.md`.**
 
-Sí conviene registrar en `docs/crecimiento-y-difusion.md` §2 que la fila "Victoria multi-acto / checklist de `CounterReady`" quedó resuelta por este ADR, con el matiz de que el checklist pasó de meta primaria a objetivo secundario.
+Sí se registra en `docs/crecimiento-y-difusion.md` §2 que la fila "Victoria multi-acto / checklist de `CounterReady`" quedó **superada por este ADR y sobrevive como objetivo secundario** — exigido por la revisión para que los dos documentos no se cuenten historias distintas.
+
+La revisión confirmó además que **nada de las enmiendas empuja hacia `packages/core`**: el HP es una proyección de dominio sobre `ResistanceApplied` (el log sigue siendo lo que el ente aprendió, no un marcador), el umbral del contador es config de dominio, y los actos son derivación de dominio. Todo del lado correcto de la frontera.
