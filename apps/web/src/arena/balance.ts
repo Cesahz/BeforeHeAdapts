@@ -206,6 +206,59 @@ export const PLAYER = tuning({
   maxHp: 100,
 });
 
+/**
+ * La carrera: HP del ente, actos y el umbral del contador honesto (ADR 0011).
+ *
+ * Ninguno de estos números está validado. El objetivo de calibración de la fase
+ * de balance es explícito y falsable (ADR 0011 §6): `enteMaxHp` va **entre** el
+ * daño extraíble secuenciando bien (gana ajustado) y el extraíble con orden
+ * ingenuo, que quema parientes consecutivos (pierde). Si los dos ganan, está
+ * bajo; si los dos pierden, está alto.
+ */
+export const VICTORY = tuning({
+  /**
+   * Vida del ente. Bajarla a cero es la única victoria.
+   *
+   * Calibrada a ojo para una run de 5-15 min (ADR 0011 §2 bis (a)): agotarse en
+   * el Acto I de una run de 10 minutos es una lección; en una de 40, un
+   * rage-quit. Rango sano: 300–900.
+   */
+  enteMaxHp: 500,
+
+  /**
+   * Efectividad esperada por debajo de la cual una firma deja de contar como
+   * viable y pasa a "debilitada".
+   *
+   * Es el dial de la enmienda P2 y el más delicado del archivo: no sale de
+   * ninguna propiedad del motor y gobierna lo que el jugador **cree** que le
+   * queda. Muy alto y el titular se desploma de golpe; muy bajo y no se mueve
+   * nunca, que es la versión optimista que la revisión rechazó. Rango sano:
+   * 0,15–0,4.
+   */
+  viableThreshold: 0.25,
+
+  /** Efectividad por debajo de la cual una firma se muestra como "casi inútil". */
+  spentThreshold: 0.08,
+
+  /** Fracción de HP del ente donde empieza el Acto II. Rango sano: 0,6–0,75. */
+  actTwoAt: 0.66,
+
+  /** Fracción de HP del ente donde empieza el Acto III. Rango sano: 0,25–0,4. */
+  actThreeAt: 0.33,
+
+  /** Multiplicador de cadencia del contraataque en el Acto II (menor = más seguido). */
+  actTwoIntervalScale: 0.75,
+
+  /** Multiplicador de cadencia del contraataque en el Acto III. */
+  actThreeIntervalScale: 0.55,
+
+  /** Multiplicador de daño del contraataque en el Acto II. */
+  actTwoDamageScale: 1.25,
+
+  /** Multiplicador de daño del contraataque en el Acto III. */
+  actThreeDamageScale: 1.6,
+});
+
 /** Contraataque materializado (ADR 0009 §4). */
 export const COUNTER = tuning({
   /** Cadencia base en ms con UN cluster adaptado. Rango sano: 7000–12000. */
