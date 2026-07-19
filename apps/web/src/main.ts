@@ -400,14 +400,18 @@ function frame(): void {
   // planificador tenga estado propio de la carrera (ADR 0011 §4).
   const golpe = scheduler.poll(t, session.arsenal, cursorPx, cursorPx ?? { x: 0, y: 0 }, session.act);
   if (golpe !== undefined) {
+    // Los dos golpes se narran distinto por el mismo motivo por el que se
+    // dibujan distinto (ADR 0012 §3): el dirigido dice qué aprendió de vos, la
+    // amenaza basal no dice nada porque no aprendió nada. Confundirlos en el log
+    // sería decirle al jugador que el ente adaptó algo que no adaptó.
+    const nombre =
+      golpe.counter === undefined ? "embate del ente" : `contraataque (${golpe.counter.weakness})`;
     if (golpe.hit) {
       session.hurt(golpe.damage);
-      log(
-        `✸ contraataque (${golpe.counter.weakness}) — ${golpe.damage.toFixed(0)} HP · quedan ${session.hp}`,
-      );
+      log(`✸ ${nombre} — ${golpe.damage.toFixed(0)} HP · quedan ${session.hp}`);
       if (session.defeated) log("EL ENTE SE ADAPTÓ A VOS. fin de la corrida.");
     } else {
-      log(`✧ contraataque esquivado (${golpe.counter.weakness})`);
+      log(`✧ ${nombre} esquivado`);
     }
   }
 

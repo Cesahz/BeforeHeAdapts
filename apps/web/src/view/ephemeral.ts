@@ -219,6 +219,16 @@ function tracerMarkup(tracer: Tracer, state: EphemeralState, now: number): strin
  * no puede lanzar, se cae al color de advertencia: el ente golpeando con algo
  * que no está en tu paleta tiene que leerse como ajeno.
  */
+/**
+ * El color de la amenaza basal: gris de piedra, fuera de la paleta de elementos.
+ *
+ * No es el color de ninguna debilidad porque no hay ninguna detrás — es el ente
+ * mismo, no algo que aprendió. Ni siquiera cae en el ámbar de advertencia, que ya
+ * significa "algo ajeno a tu paleta": la basal tiene que leerse como fondo, no
+ * como novedad.
+ */
+const BASAL_COLOR = "#8a949c";
+
 function counterColor(weakness: string): string {
   const element = weakness.startsWith("elem:") ? weakness.slice(5) : undefined;
   if (element !== undefined && element in ELEMENT_COLOR) {
@@ -239,7 +249,11 @@ function counterColor(weakness: string): string {
 function counterMarkup(phase: CounterPhase, strikeRadius: number, now: number): string {
   if (phase.kind === "idle") return "";
 
-  const color = counterColor(phase.counter.weakness);
+  // La amenaza basal se dibuja **gris y sin trama**: el ente ocupando espacio, no
+  // el ente usando lo que aprendió de vos (ADR 0012 §3). Que se distingan es
+  // deliberado — si se vieran iguales, la recompensa de adaptar sería invisible.
+  const basal = phase.source === "basal";
+  const color = basal ? BASAL_COLOR : counterColor(phase.counter?.weakness ?? "");
 
   if (phase.kind === "telegraph") {
     const span = phase.strikeAt - phase.startedAt;
@@ -249,7 +263,7 @@ function counterMarkup(phase: CounterPhase, strikeRadius: number, now: number): 
     const radius = strikeRadius * (2.6 - 1.6 * p);
     return (
       `<circle cx="${n(phase.at.x)}" cy="${n(phase.at.y)}" r="${n(radius)}" fill="none" ` +
-      `stroke="${color}" stroke-width="${n(1 + 2 * p)}" stroke-opacity="${n(0.35 + 0.5 * p)}" stroke-dasharray="6 5"/>` +
+      `stroke="${color}" stroke-width="${n(1 + 2 * p)}" stroke-opacity="${n(0.35 + 0.5 * p)}"${basal ? "" : ` stroke-dasharray="6 5"`}/>` +
       // El disco real, tenue desde el principio: dónde NO hay que estar.
       `<circle cx="${n(phase.at.x)}" cy="${n(phase.at.y)}" r="${n(strikeRadius)}" fill="${color}" fill-opacity="${n(0.06 + 0.1 * p)}"/>`
     );

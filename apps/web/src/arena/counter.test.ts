@@ -9,14 +9,17 @@
 import { describe, expect, it } from "vitest";
 import { cooldownOf, type Composition } from "@beforeheadapts/arena-dsl";
 
-import { COUNTER } from "./balance.js";
+import { BASAL, COUNTER } from "./balance.js";
 import { CombatSession } from "./combat.js";
 import {
+  basalDamageFor,
+  basalIntervalFor,
   CounterScheduler,
   damageFor,
   intervalFor,
   selectCounter,
   telegraphFor,
+  type CounterSource,
 } from "./counter.js";
 import { Room } from "./room.js";
 
@@ -95,12 +98,64 @@ describe("selección determinista", () => {
 });
 
 describe("anatomía de un impacto", () => {
-  it("sin arsenal el ente no golpea nunca", () => {
+  it("sin arsenal el ente no golpea DIRIGIDO, pero ocupa espacio igual", () => {
+    // Este test decía "sin arsenal el ente no golpea nunca", y era verdad hasta
+    // el ADR 0012. La sonda mostró qué costaba: el 80 % del daño que decidía la
+    // carrera se infligía en ese silencio. La enmienda al ADR 0009 §4 es
+    // exactamente esta línea — sin arsenal no hay golpe *dirigido*.
+    //
+    // Lo que NO cambió, y es lo que el test cuida ahora: el ente no puede
+    // contraatacar con debilidades que no aprendió (R2/R3). Todo lo que salga
+    // acá tiene que ser basal, sin debilidad detrás.
     const scheduler = new CounterScheduler();
-    for (let t = 0; t < 120_000; t += 100) {
-      expect(scheduler.poll(t, [], ORIGEN, CENTRO)).toBeUndefined();
+    let golpes = 0;
+
+    for (let t = 0; t < 120_000; t += 16) {
+      const r = scheduler.poll(t, [], ORIGEN, CENTRO);
+      if (r === undefined) continue;
+      golpes += 1;
+      expect(r.source).toBe("basal");
+      expect(r.counter).toBeUndefined();
     }
-    expect(scheduler.shots).toBe(0);
+
+    expect(golpes).toBeGreaterThan(0);
+    expect(scheduler.nextAt).toBeUndefined();
+  });
+
+  it("la amenaza basal ya está ejerciendo presión en el primer minuto", () => {
+    // El dial existe para llenar el arranque en frío. Si el primer golpe basal
+    // llegara tarde, no habría llenado nada: el objetivo del ADR 0012 §4 es que
+    // el jugador competente NO pueda resolver la carrera antes de la amenaza.
+    const scheduler = new CounterScheduler();
+    let primero: number | undefined;
+
+    for (let t = 0; t < 60_000 && primero === undefined; t += 16) {
+      if (scheduler.poll(t, [], ORIGEN, CENTRO) !== undefined) primero = t;
+    }
+
+    expect(primero).toBeDefined();
+    // Los dos cuadros de holgura son el redondeo del paso de 16 ms: uno para
+    // encender el aviso y otro para resolverlo.
+    expect(primero!).toBeLessThanOrEqual(BASAL.baseIntervalMs + BASAL.telegraphMs + 32);
+  });
+
+  it("la basal duele menos que el contraataque dirigido", () => {
+    // No es un número de balance: es la tesis. Los dirigidos son la recompensa
+    // de adaptar. Si la basal pegara igual o más fuerte, adaptar dejaría de
+    // notarse y el ente pasaría a ser ruido con pasos.
+    for (const arsenalSize of [1, 2, 3, 5, 8]) {
+      expect(basalDamageFor(arsenalSize)).toBeLessThan(damageFor(arsenalSize));
+    }
+  });
+
+  it("la basal avisa más que el dirigido, siempre", () => {
+    // Regla de justicia del ADR 0012 §1: solo interrumpe lo telegrafiado. La
+    // basal es el golpe que aparece cuando el jugador todavía no aprendió a leer
+    // nada, así que es el que más aviso da — incluso con el arsenal lleno, donde
+    // el dirigido ya está en su piso.
+    for (const arsenalSize of [0, 1, 4, 12, 40]) {
+      expect(BASAL.telegraphMs).toBeGreaterThan(telegraphFor(arsenalSize));
+    }
   });
 
   it("avisa antes de golpear: telegraph primero, resolución después", () => {
@@ -147,7 +202,14 @@ describe("anatomía de un impacto", () => {
     }
 
     expect(resolucion?.hit).toBe(true);
-    expect(resolucion?.damage).toBe(damageFor(arsenal.length));
+    // Cuál de los dos relojes llegó primero depende del balance, y este test no
+    // es sobre eso: es sobre que quedarse quieto en el punto fijado duele. Cada
+    // fuente cobra por su propia fórmula.
+    expect(resolucion?.damage).toBe(
+      resolucion?.source === "basal"
+        ? basalDamageFor(arsenal.length)
+        : damageFor(arsenal.length),
+    );
   });
 
   it("no lastima al que sale del disco a tiempo", () => {
@@ -179,22 +241,54 @@ describe("anatomía de un impacto", () => {
     expect(pxNecesarios / msDisponibles).toBeLessThan(0.5);
   });
 
-  it("respeta el intervalo entre golpes sucesivos", () => {
+  it("respeta el intervalo entre golpes sucesivos de cada fuente", () => {
+    // Desde el ADR 0012 son DOS relojes independientes, y por eso se miden por
+    // separado: mezclarlos daría huecos más chicos que cualquiera de los dos
+    // intervalos sin que ninguno de los dos se haya violado.
     const arsenal = sesionConArsenal().arsenal;
     const scheduler = new CounterScheduler();
-    const momentos: number[] = [];
+    const momentos: Record<CounterSource, number[]> = { arsenal: [], basal: [] };
 
     for (let t = 0; t < 180_000; t += 16) {
-      if (scheduler.poll(t, arsenal, ORIGEN, CENTRO) !== undefined) momentos.push(t);
+      const r = scheduler.poll(t, arsenal, ORIGEN, CENTRO);
+      if (r !== undefined) momentos[r.source].push(t);
     }
 
-    expect(momentos.length).toBeGreaterThan(2);
-    const minimo = intervalFor(arsenal.length);
-    for (let i = 1; i < momentos.length; i += 1) {
-      // El hueco es intervalo + aviso: la cadencia se reagenda desde la
-      // resolución, así que el intervalo es respiro y no incluye el telegraph.
-      expect(momentos[i]! - momentos[i - 1]!).toBeGreaterThanOrEqual(minimo);
+    const minimos: Record<CounterSource, number> = {
+      arsenal: intervalFor(arsenal.length),
+      basal: basalIntervalFor(arsenal.length),
+    };
+
+    for (const source of ["arsenal", "basal"] as const) {
+      const propios = momentos[source];
+      expect(propios.length).toBeGreaterThan(2);
+      for (let i = 1; i < propios.length; i += 1) {
+        // El hueco es intervalo + aviso: la cadencia se reagenda desde la
+        // resolución, así que el intervalo es respiro y no incluye el telegraph.
+        expect(propios[i]! - propios[i - 1]!).toBeGreaterThanOrEqual(minimos[source]);
+      }
     }
+  });
+
+  it("nunca hay dos avisos encendidos a la vez", () => {
+    // Dos telegraphs simultáneos sobre la misma pantalla son ilegibles, y un
+    // golpe que no se puede leer es ruido, no dificultad (ADR 0012 §1). Con dos
+    // relojes independientes esto dejó de ser gratis: hay que sostenerlo.
+    const arsenal = sesionConArsenal().arsenal;
+    const scheduler = new CounterScheduler();
+
+    for (let t = 0; t < 180_000; t += 16) {
+      scheduler.poll(t, arsenal, ORIGEN, CENTRO);
+      const fase = scheduler.phase;
+      // La fase es una sola por construcción; lo que se cuida es que el golpe
+      // dirigido no se pierda cuando la basal le gana el cuadro.
+      if (fase.kind === "telegraph" && fase.source === "basal") {
+        expect(fase.counter).toBeUndefined();
+      }
+    }
+
+    // Y sobre todo: la basal cede, no tapa. El ente sigue contraatacando.
+    expect(scheduler.shots).toBeGreaterThan(0);
   });
 });
 

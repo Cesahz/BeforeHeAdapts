@@ -21,7 +21,7 @@
 
 import type { Primitive } from "@beforeheadapts/core";
 
-import { COUNTER, VICTORY } from "./balance.js";
+import { BASAL, COUNTER, VICTORY } from "./balance.js";
 import type { Act, ArmedCounter } from "./combat.js";
 import { AMBIENT_ELEMENT } from "./ambient.js";
 
@@ -31,23 +31,43 @@ export interface Point {
 }
 
 /**
+ * De dónde sale un golpe (ADR 0012 §3).
+ *
+ * `arsenal` es el contraataque **dirigido**: el ente usando una debilidad que
+ * aprendió de vos. Es la recompensa de adaptar y lleva la identidad de su
+ * debilidad.
+ *
+ * `basal` es el ente **ocupando espacio**: no dirigido, sin debilidad detrás,
+ * porque no hay ninguna aprendida que expresar. Es un piso de amenaza, no un
+ * contraataque. Los dos tienen que **verse distintos**: si se ven iguales, la
+ * recompensa de adaptar se vuelve invisible.
+ */
+export type CounterSource = "arsenal" | "basal";
+
+/**
  * En qué está el ente ahora mismo. Lo lee la capa efímera para dibujar.
  *
  * El punto se **fija** al empezar el telegraph y no sigue al cursor: si
  * persiguiera, esquivar sería imposible y el aviso previo no significaría nada.
+ *
+ * `counter` es `undefined` exactamente cuando `source` es `basal`: no hay
+ * debilidad que mostrar. El tipo lo deja explícito para que ningún consumidor
+ * pueda dibujar los dos golpes igual sin darse cuenta.
  */
 export type CounterPhase =
   | { readonly kind: "idle" }
   | {
       readonly kind: "telegraph";
-      readonly counter: ArmedCounter;
+      readonly source: CounterSource;
+      readonly counter: ArmedCounter | undefined;
       readonly at: Point;
       readonly startedAt: number;
       readonly strikeAt: number;
     }
   | {
       readonly kind: "strike";
-      readonly counter: ArmedCounter;
+      readonly source: CounterSource;
+      readonly counter: ArmedCounter | undefined;
       readonly at: Point;
       readonly until: number;
       readonly hit: boolean;
@@ -55,7 +75,9 @@ export type CounterPhase =
 
 /** Un golpe resuelto. Lo devuelve `poll` una sola vez, en el instante en que resuelve. */
 export interface CounterResolution {
-  readonly counter: ArmedCounter;
+  readonly source: CounterSource;
+  /** `undefined` en la amenaza basal: no hay debilidad detrás del golpe. */
+  readonly counter: ArmedCounter | undefined;
   readonly at: Point;
   /** `false` si el cursor estaba fuera del disco: esquivado, sin daño. */
   readonly hit: boolean;
@@ -104,6 +126,21 @@ export function damageFor(arsenalSize: number, act: Act = 1): number {
   return raw * scalesFor(act).damage;
 }
 
+/**
+ * Cadencia de la amenaza basal (ADR 0012 §3). **Nunca es `Infinity`**: corre
+ * desde el segundo cero, con arsenal vacío, que es todo el punto del dial.
+ */
+export function basalIntervalFor(arsenalSize: number, act: Act = 1): number {
+  const raw = BASAL.baseIntervalMs / (1 + BASAL.intervalAccel * Math.max(0, arsenalSize));
+  return Math.max(BASAL.minIntervalMs, raw * scalesFor(act).interval);
+}
+
+/** Daño de la amenaza basal. Escala con lo adaptado y con el acto, como todo lo demás. */
+export function basalDamageFor(arsenalSize: number, act: Act = 1): number {
+  const raw = BASAL.baseDamage + BASAL.damagePerCluster * Math.max(0, arsenalSize);
+  return raw * scalesFor(act).damage;
+}
+
 /** Aviso previo según cuántos clusters adaptó el ente. Se acorta; nunca por debajo del piso. */
 export function telegraphFor(arsenalSize: number): number {
   if (arsenalSize <= 0) return COUNTER.baseTelegraphMs;
@@ -139,6 +176,8 @@ export class CounterScheduler {
   #shots = 0;
   /** Rate-limit propio del contraataque de ruido, independiente de la cadencia. */
   #lastAmbientAt = -Infinity;
+  /** Reloj de la amenaza basal: propio, y corriendo desde el primer `poll`. */
+  #nextBasalAt: number | undefined;
 
   get phase(): CounterPhase {
     return this.#phase;
@@ -148,9 +187,27 @@ export class CounterScheduler {
     return this.#shots;
   }
 
-  /** Cuándo cae el próximo golpe de cadencia. Lo muestra el HUD como presión legible. */
+  /**
+   * Cuándo cae el próximo golpe de cadencia dirigida. `undefined` mientras el
+   * arsenal esté vacío — que ya no significa "sin amenaza": ver `nextBasalAt`.
+   */
   get nextAt(): number | undefined {
     return this.#nextAt;
+  }
+
+  /** Cuándo cae la próxima amenaza basal. `undefined` solo antes del primer `poll`. */
+  get nextBasalAt(): number | undefined {
+    return this.#nextBasalAt;
+  }
+
+  /**
+   * El próximo golpe, venga de donde venga. Es lo que el HUD tiene que mostrar
+   * como presión legible, y con lo que razona un jugador que mira el reloj.
+   */
+  get nextThreatAt(): number | undefined {
+    if (this.#nextAt === undefined) return this.#nextBasalAt;
+    if (this.#nextBasalAt === undefined) return this.#nextAt;
+    return Math.min(this.#nextAt, this.#nextBasalAt);
   }
 
   /**
@@ -170,13 +227,15 @@ export class CounterScheduler {
     fallback: Point,
     act: Act = 1,
   ): CounterResolution | undefined {
-    // Sin arsenal el ente no tiene con qué golpear. No es una pausa: es que
-    // todavía no aprendió nada, y el reloj recién arranca cuando aprende.
-    if (arsenal.length === 0) {
-      this.#phase = { kind: "idle" };
-      this.#nextAt = undefined;
-      return undefined;
-    }
+    // La amenaza basal arranca su reloj en el primer cuadro, con el arsenal
+    // vacío: es exactamente el tramo en frío que el ADR 0012 vino a llenar.
+    this.#nextBasalAt ??= now + basalIntervalFor(arsenal.length, act);
+
+    // Sin arsenal el ente no tiene con qué golpear DIRIGIDO: no aprendió
+    // ninguna debilidad todavía, y ese reloj recién arranca cuando aprende. La
+    // amenaza basal sigue corriendo igual — sin arsenal no hay golpe *dirigido*
+    // (enmienda al ADR 0009 §4).
+    if (arsenal.length === 0) this.#nextAt = undefined;
 
     if (this.#phase.kind === "strike") {
       if (now >= this.#phase.until) this.#phase = { kind: "idle" };
@@ -188,13 +247,22 @@ export class CounterScheduler {
       return this.#resolve(now, arsenal, cursor, act);
     }
 
-    // Fase idle: o se agenda el primer golpe, o cae el que estaba agendado.
-    if (this.#nextAt === undefined) {
-      this.#nextAt = now + intervalFor(arsenal.length, act);
-      return undefined;
+    // Fase idle: o se agenda el próximo golpe, o cae el que estaba agendado.
+    if (arsenal.length > 0) {
+      if (this.#nextAt === undefined) {
+        this.#nextAt = now + intervalFor(arsenal.length, act);
+      } else if (now >= this.#nextAt) {
+        this.#begin(now, arsenal, cursor ?? fallback);
+        return undefined;
+      }
     }
-    if (now >= this.#nextAt) {
-      this.#begin(now, arsenal, cursor ?? fallback);
+
+    // La basal cede ante el dirigido: si los dos vencen en el mismo cuadro pega
+    // el que lleva identidad, y la basal espera. Dos telegraphs simultáneos
+    // sobre la misma pantalla son ilegibles, y de los dos el que no puede
+    // perderse es el que muestra lo que el ente aprendió de vos.
+    if (now >= this.#nextBasalAt) {
+      this.#beginBasal(now, cursor ?? fallback);
     }
     return undefined;
   }
@@ -219,6 +287,7 @@ export class CounterScheduler {
     this.#lastAmbientAt = now;
     this.#phase = {
       kind: "telegraph",
+      source: "arsenal",
       counter: ambient,
       at,
       startedAt: now,
@@ -232,10 +301,25 @@ export class CounterScheduler {
     if (counter === undefined) return;
     this.#phase = {
       kind: "telegraph",
+      source: "arsenal",
       counter,
       at,
       startedAt: now,
       strikeAt: now + telegraphFor(arsenal.length),
+    };
+  }
+
+  /** El golpe no dirigido. Mismo aviso, mismo disco, sin debilidad detrás. */
+  #beginBasal(now: number, at: Point): void {
+    this.#phase = {
+      kind: "telegraph",
+      source: "basal",
+      counter: undefined,
+      at,
+      startedAt: now,
+      // Aviso fijo: no se acorta con el arsenal. Lo que el ente aprendió acelera
+      // sus contraataques dirigidos; la amenaza de fondo se mantiene legible.
+      strikeAt: now + BASAL.telegraphMs,
     };
   }
 
@@ -255,15 +339,35 @@ export class CounterScheduler {
       cursor === undefined ||
       Math.hypot(cursor.x - fase.at.x, cursor.y - fase.at.y) <= COUNTER.strikeRadiusPx;
 
-    const damage = hit ? damageFor(arsenal.length, act) : 0;
+    const basal = fase.source === "basal";
+    const damage = hit
+      ? basal
+        ? basalDamageFor(arsenal.length, act)
+        : damageFor(arsenal.length, act)
+      : 0;
 
     this.#shots += 1;
-    this.#phase = { kind: "strike", counter: fase.counter, at: fase.at, until: now + COUNTER.strikeMs, hit };
-    // La cadencia se reagenda desde la resolución, no desde el disparo: así el
-    // intervalo es tiempo de RESPIRO entre golpes y no incluye el aviso previo,
-    // que es justo el tramo en que el jugador ya está bajo presión.
-    this.#nextAt = now + intervalFor(arsenal.length, act);
+    this.#phase = {
+      kind: "strike",
+      source: fase.source,
+      counter: fase.counter,
+      at: fase.at,
+      until: now + COUNTER.strikeMs,
+      hit,
+    };
+    // Las dos cadencias se reagendan desde la resolución, no desde el disparo:
+    // así el intervalo es tiempo de RESPIRO entre golpes y no incluye el aviso
+    // previo, que es justo el tramo en que el jugador ya está bajo presión.
+    //
+    // Se reagenda SOLO el reloj que disparó: son relojes independientes, y que
+    // un golpe dirigido corriera el de la amenaza basal la volvería a atar al
+    // arsenal, que es exactamente lo que el ADR 0012 §3 no quiere.
+    if (basal) {
+      this.#nextBasalAt = now + basalIntervalFor(arsenal.length, act);
+    } else {
+      this.#nextAt = now + intervalFor(arsenal.length, act);
+    }
 
-    return { counter: fase.counter, at: fase.at, hit, damage };
+    return { source: fase.source, counter: fase.counter, at: fase.at, hit, damage };
   }
 }

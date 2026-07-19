@@ -114,6 +114,12 @@ export interface ProbeResult {
   readonly firstShotMs: number | null;
   /** Golpes que el ente llegó a lanzar en toda la corrida (acertados + esquivados). */
   readonly shots: number;
+  /**
+   * De esos golpes, cuántos fueron amenaza basal (ADR 0012 §3): no dirigidos, sin
+   * debilidad detrás. La diferencia contra `shots` son los dirigidos, que siguen
+   * siendo la recompensa exclusiva de adaptar.
+   */
+  readonly basalShots: number;
   /** Clusters que el ente adaptó: el tamaño final de su arsenal. */
   readonly arsenal: number;
   /**
@@ -171,6 +177,7 @@ export function probe(options: ProbeOptions): ProbeResult {
   let hitsTaken = 0;
   let dodges = 0;
   let firstShotMs: number | null = null;
+  let basalShots = 0;
   let coldDamage = 0;
   let now = 0;
 
@@ -214,6 +221,7 @@ export function probe(options: ProbeOptions): ProbeResult {
 
     if (resolution !== undefined) {
       firstShotMs ??= now;
+      if (resolution.source === "basal") basalShots += 1;
       if (resolution.hit) {
         hitsTaken += 1;
         session.hurt(resolution.damage);
@@ -268,6 +276,7 @@ export function probe(options: ProbeOptions): ProbeResult {
     viableLeft: session.vocabulary.viable,
     firstShotMs,
     shots: scheduler.shots,
+    basalShots,
     arsenal: session.arsenal.length,
     coldDamageFraction: dealt === 0 ? 0 : coldDamage / dealt,
   };
@@ -298,8 +307,12 @@ function puedeEmpezar(
   // próximo golpe de cadencia cae a mitad del trazo, todavía tiene el aviso
   // previo para reaccionar, así que arrancar es razonable. El cauto no arranca
   // nada que no pueda cerrar antes del próximo golpe.
-  if (options.policy === "cauto" && scheduler.nextAt !== undefined) {
-    return fin <= scheduler.nextAt;
+  // `nextThreatAt` y no `nextAt`: desde el ADR 0012 §3 el próximo golpe puede ser
+  // la amenaza basal, que corre con su propio reloj desde el segundo cero. Mirar
+  // solo la cadencia dirigida haría que el cauto arrancara trazos ciego durante
+  // todo el arranque en frío, que es justo el tramo que el dial vino a llenar.
+  if (options.policy === "cauto" && scheduler.nextThreatAt !== undefined) {
+    return fin <= scheduler.nextThreatAt;
   }
   return true;
 }

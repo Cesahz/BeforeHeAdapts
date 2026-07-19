@@ -370,6 +370,57 @@ export const COUNTER = tuning({
   ambientCooldownMs: 3000,
 });
 
+/**
+ * Amenaza basal: el ente ocupando espacio desde el segundo cero (ADR 0012 §3).
+ *
+ * El dial que la sonda hizo inevitable. El 80 % del daño que decide la carrera se
+ * infligía EN FRÍO, antes del primer contraataque, porque el arsenal del ente
+ * arranca vacío y su reloj no corre hasta la primera `AdaptationCompleted`.
+ *
+ * No puede venir de `CounterReady`: el ente **no puede contraatacar con
+ * debilidades que no aprendió** (R2/R3, congelados). Por eso este golpe es NO
+ * DIRIGIDO — telegrafiado y esquivable como cualquier otro, pero sin dimensión de
+ * debilidad detrás. No es un contraataque; es un piso de amenaza que hace que
+ * atacar nunca sea gratis. Los contraataques dirigidos siguen siendo la
+ * recompensa exclusiva de adaptar.
+ *
+ * Se lo quiere **presente y barato**: más seguido que el contraataque dirigido,
+ * con menos daño y con más aviso. Si duele como un dirigido, la recompensa de
+ * adaptar se vuelve invisible.
+ */
+export const BASAL = tuning({
+  /**
+   * Cadencia en ms con el arsenal vacío — el ritmo del arranque en frío, que es
+   * el tramo que este dial existe para llenar. Rango sano: 4000–7000.
+   * Subirlo devuelve el problema que el ADR 0012 midió.
+   */
+  baseIntervalMs: 5500,
+
+  /**
+   * Cuánto acelera por cluster adaptado: `interval = base / (1 + accel × |arsenal|)`.
+   * A diferencia de la cadencia dirigida, acá el arsenal puede ser 0 (de eso se
+   * trata), así que no se resta uno. Rango sano: 0,15–0,4.
+   */
+  intervalAccel: 0.25,
+
+  /** Piso de cadencia. Se suma a la del contraataque dirigido: dejar aire. Rango sano: 2000–3000. */
+  minIntervalMs: 2200,
+
+  /** Daño base en HP. Deliberadamente menor que `COUNTER.baseDamage`. Rango sano: 3–7. */
+  baseDamage: 5,
+
+  /** HP extra por cluster adaptado. Rango sano: 1–3. */
+  damagePerCluster: 1.5,
+
+  /**
+   * Aviso previo en ms. FIJO y más largo que el del dirigido: la amenaza basal es
+   * el golpe más fácil de leer del juego a propósito. Es el que aparece cuando el
+   * jugador todavía no aprendió a leer nada, y la regla de justicia del ADR 0012
+   * §1 (solo interrumpe lo telegrafiado) lo obliga. Rango sano: 750–1000.
+   */
+  telegraphMs: 850,
+});
+
 /** Capa efímera del render: lo que se ve en vivo y no va al replay (ADR 0010 §2). */
 export const EPHEMERAL = tuning({
   /**

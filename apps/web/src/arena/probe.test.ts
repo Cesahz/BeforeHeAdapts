@@ -1,17 +1,15 @@
-// probe.test.ts — los hallazgos de la sonda, congelados como aserciones.
+// probe.test.ts — la sonda: primero el diagnóstico, ahora la compuerta.
 //
-// Estos tests NO protegen una implementación: protegen un DIAGNÓSTICO. Cada uno
-// es un hecho medido sobre la carrera del ADR 0011 que hasta ahora nadie había
-// medido, y que el ADR 0012 tiene que citar en vez de intuir.
+// Estos tests nacieron protegiendo un DIAGNÓSTICO: hechos medidos sobre la
+// carrera del ADR 0011 que nadie había medido, y que el ADR 0012 cita en vez de
+// intuir. Ese ADR fijó además cinco objetivos de calibración explícitos y
+// falsables (§4), con la orden de calibrar cada dial CONTRA LA SONDA, nunca a
+// ojo. A medida que los diales se implementan, cada hallazgo se da vuelta y pasa
+// a ser su objetivo — el número medido queda documentado al lado.
 //
-// El más importante es también el más incómodo: la mecánica de interrupción, por
-// sí sola, NO cambia el desenlace de un jugador competente. Es correcta en
-// dirección y muy chica en magnitud, y el motivo se mide acá abajo — el ente
-// alcanza a disparar cinco o siete veces en toda la corrida.
-//
-// Si alguno de estos tests se pone en verde por el lado contrario (por ejemplo,
-// si el jugador competente empieza a recibir daño), es que el balance cambió y
-// el diagnóstico del ADR 0012 hay que releerlo, no borrar el test.
+// Un objetivo que todavía no se cumple se deja escrito y ROJO al revés: se
+// asienta lo que hoy mide la sonda y se nombra el dial que falta. No se afloja
+// un objetivo del ADR para que la suite quede verde.
 
 import { describe, expect, it } from "vitest";
 
@@ -20,58 +18,100 @@ import { probe } from "./probe.js";
 
 const inteligente = { order: "inteligente", policy: "calculador" } as const;
 
-describe("la mitad de presión no existe (el agujero que el ADR 0011 no midió)", () => {
-  it("hoy un jugador competente gana SIN RECIBIR UN SOLO PUNTO DE DAÑO", () => {
-    // Este es el playtest del autor del 2026-07-19 reproducido en la sonda, y la
-    // razón de que la corrida "no tenga tensión": no es que sea poco daño, es
-    // que con atención constante es exactamente cero. Lo único entre el jugador
-    // y la invulnerabilidad es mirar la pantalla, nunca una decisión.
+describe("dial 3 del ADR 0012: la amenaza basal contra el arranque en frío", () => {
+  it("objetivo 1 — el daño en frío baja del 35 %", () => {
+    // ERA 0,80: el 80 % del daño que decidía la carrera se infligía antes del
+    // primer contraataque, porque el arsenal del ente arranca vacío y su reloj
+    // no corría hasta la primera `AdaptationCompleted`. La presión llegaba
+    // cuando la partida ya estaba jugada, y ningún dial de densidad tardía
+    // arreglaba eso. Con la amenaza basal andando: 0,23.
+    //
+    // Es la métrica que valida si la presión temprana funcionó. Si vuelve a
+    // subir, la carrera se resuelve sola otra vez.
+    const r = probe({ ...inteligente, interruption: false });
+
+    expect(r.coldDamageFraction).toBeLessThan(0.35);
+  });
+
+  it("la amenaza aparece en el primer cuarto de la corrida, no pasada la mitad", () => {
+    // ERA 0,70. El ente ya no espera a aprender algo para existir: la basal
+    // tiene reloj propio desde el segundo cero. Hoy: 0,15.
+    const r = probe({ ...inteligente, interruption: false });
+
+    expect(r.firstShotMs).not.toBeNull();
+    expect(r.firstShotMs! / r.elapsedMs).toBeLessThan(0.25);
+  });
+
+  it("el golpe del ente deja de ser anecdótico", () => {
+    // ERAN 5 a 7 disparos contra ~62 ataques del jugador. Hoy: 15, de los cuales
+    // 10 son basales — o sea que la mayor parte de la presión existe justamente
+    // donde antes no había ninguna.
+    //
+    // ⚠️ Esto NO es todavía el objetivo de "recurrente" del ADR 0012 §2: ese es
+    // el dial de densidad, que se re-calibra después y contra esta misma sonda.
+    const r = probe({ ...inteligente, interruption: false });
+
+    expect(r.shots).toBeGreaterThan(10);
+    expect(r.basalShots).toBeGreaterThan(0);
+    expect(r.attacks).toBeGreaterThan(50);
+  });
+
+  it("los contraataques DIRIGIDOS siguen siendo la recompensa de adaptar", () => {
+    // La tesis, custodiada donde puede romperse sin que se note: si la basal se
+    // comiera toda la presión, adaptar dejaría de tener consecuencia visible y
+    // el ente pasaría a ser ruido con reloj. Tiene que haber golpes dirigidos, y
+    // tienen que ser una porción real del total.
+    const r = probe({ ...inteligente, interruption: false });
+
+    expect(r.shots - r.basalShots).toBeGreaterThan(0);
+    expect(r.basalShots / r.shots).toBeLessThan(0.85);
+  });
+
+  it("objetivo 4 — la compuerta del ADR 0011 sigue en pie", () => {
+    // El límite duro del ADR 0012: la presión no puede volver invencible al
+    // ente. Si esto se rompiera, el dial está mal, no la compuerta — y NO se
+    // arregla moviendo `enteMaxHp`, que está medido y congelado.
+    expect(probe({ ...inteligente, interruption: false }).outcome).toBe("victory");
+    expect(probe({ order: "ingenuo", policy: "calculador", interruption: false }).outcome).toBe(
+      "defeat-exhausted",
+    );
+  });
+});
+
+describe("lo que la amenaza basal NO alcanza a arreglar sola", () => {
+  it("objetivo 2 — la inversión perversa quedó al borde, pero no desapareció", () => {
+    // ERA 0,80 contra 0,34: jugar bien no era sobrevivir a la presión, era
+    // ESQUIVARLA cerrando la carrera antes de que el ente despertara. Cuanto
+    // mejor jugabas, menos juego había.
+    //
+    // Con la basal la brecha se derrumbó de +0,46 a +0,02 (0,23 vs 0,21), que es
+    // casi todo el camino. Pero el objetivo del ADR es que la fracción del
+    // competente **deje de ser mayor**, y todavía lo es por un pelo. Se asienta
+    // el estado real: la brecha colapsó, el signo no se dio vuelta.
+    const competente = probe({ ...inteligente, interruption: false });
+    const ingenuo = probe({ order: "ingenuo", policy: "calculador", interruption: false });
+
+    const brecha = competente.coldDamageFraction - ingenuo.coldDamageFraction;
+    expect(brecha).toBeLessThan(0.05);
+    // ⚠️ Todavía positiva. Se da vuelta con los diales 1 y 2 (interrupción y
+    // densidad), que son los que castigan al que pelea más tiempo bajo amenaza.
+    expect(brecha).toBeGreaterThan(0);
+  });
+
+  it("objetivo 3 — el jugador competente TODAVÍA gana intacto", () => {
+    // El objetivo del ADR es que ganar sin recibir un solo golpe deje de ser el
+    // resultado por defecto. La amenaza basal sola no lo consigue, y era
+    // previsible: la basal es esquivable con atención, igual que el dirigido, y
+    // este jugador simulado tiene atención perfecta.
+    //
+    // Lo que falta es exactamente el dial 1: sin interrupción de gestos, dibujar
+    // y esquivar siguen siendo actividades independientes que nunca compiten.
+    // Este test es el recordatorio de que el ADR 0012 no está terminado.
     const r = probe({ ...inteligente, interruption: false });
 
     expect(r.outcome).toBe("victory");
     expect(r.hitsTaken).toBe(0);
     expect(r.playerHp).toBe(PLAYER.maxHp);
-  });
-
-  it("el ente alcanza a disparar menos de diez veces en toda la corrida", () => {
-    // La causa raíz. Con ~60 ataques del jugador y un puñado de contraataques,
-    // el golpe del ente es un evento anecdótico: ninguna mecánica de interacción
-    // puede generar tensión con esta densidad, por buena que sea.
-    const r = probe({ ...inteligente, interruption: false });
-
-    expect(r.shots).toBeLessThan(10);
-    expect(r.attacks).toBeGreaterThan(50);
-  });
-
-  it("el 80 % del daño que decide la carrera se inflige EN FRÍO", () => {
-    // La medición que ordena el ADR 0012. No es que la presión sea poca: es que
-    // llega cuando la partida ya está jugada. Ningún dial de densidad tardía
-    // arregla esto — amontonar golpes al final es agregar presión donde ya no
-    // queda carrera que decidir. Por eso el tercer dial (amenaza basal) existe.
-    const r = probe({ ...inteligente, interruption: false });
-
-    expect(r.coldDamageFraction).toBeGreaterThan(0.7);
-  });
-
-  it("y jugar BIEN aumenta la fracción en frío: la inversión perversa", () => {
-    // El hallazgo más incómodo de la sonda. El orden ingenuo tarda más, así que
-    // le da tiempo al ente a despertarse y pelea ~65 % de su daño bajo amenaza.
-    // El competente termina antes de que eso pase. Hoy, jugar bien no es
-    // sobrevivir a la presión: es esquivarla cerrando la carrera en frío.
-    const competente = probe({ ...inteligente, interruption: false });
-    const ingenuo = probe({ order: "ingenuo", policy: "calculador", interruption: false });
-
-    expect(competente.coldDamageFraction).toBeGreaterThan(ingenuo.coldDamageFraction);
-  });
-
-  it("el ente recién empieza a contraatacar pasada la mitad de la corrida", () => {
-    // El arsenal del ente arranca vacío y solo se llena con `AdaptationCompleted`,
-    // así que su reloj ni siquiera corre hasta la primera adaptación. La presión
-    // aparece cuando la carrera ya está casi resuelta.
-    const r = probe({ ...inteligente, interruption: false });
-
-    expect(r.firstShotMs).not.toBeNull();
-    expect(r.firstShotMs! / r.elapsedMs).toBeGreaterThan(0.5);
   });
 });
 
