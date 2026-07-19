@@ -1,6 +1,6 @@
 # Crecimiento, difusión y distribución
 
-**Estado:** exploratorio, NO normativo. Deriva de la investigación de retención/difusión (2026-07) + revisión arquitectónica externa. Mismo régimen que `roadmap-avanzado.md`: las ideas salen hacia implementación **solo vía ADR**, y nada de este documento autoriza tocar `packages/core`, el contrato ni el esquema de eventos. Lo personal/operativo del autor vive en `docs/privado/`, no acá.
+**Estado:** exploratorio, NO normativo. Deriva de la investigación de retención/difusión (2026-07; texto completo en `docs/privado/investigacion-retencion-difusion.md` — contiene datos personales del autor y no se publica) + revisión arquitectónica externa. Este documento es su destilado público y la única versión normativa de sus veredictos. Mismo régimen que `roadmap-avanzado.md`: las ideas salen hacia implementación **solo vía ADR**, y nada de este documento autoriza tocar `packages/core`, el contrato ni el esquema de eventos. Lo personal/operativo del autor vive en `docs/privado/`, no acá.
 
 ---
 
