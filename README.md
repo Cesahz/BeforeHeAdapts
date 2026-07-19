@@ -104,6 +104,16 @@ Solo el núcleo y su contrato:
 pnpm --filter @beforeheadapts/core test
 ```
 
+### Jugar la arena
+
+El dominio vitrina, con el motor corriendo entero en el navegador:
+
+```bash
+pnpm --filter @beforeheadapts/web dev
+```
+
+Se ataca dibujando con el cursor —recta, sostenido, círculo y zigzag— con un elemento armado que se cambia sobre la marcha. Cada golpe es una exposición real: el ente atenúa lo repetido, consolida adaptaciones y arma contraataques con las debilidades que te aprendió. El contador de **firmas viables** de arriba es el instrumento de tensión, y es honesto — mide el multiplicador de daño real de la próxima exposición, no "cuántas quedan sin adaptar".
+
 ### Ver el motor con los ojos
 
 El demo del visualizador arma un log sintético con el motor real, lo renderiza a SVG numerados y genera una página autocontenida que los reproduce en secuencia:
@@ -136,6 +146,10 @@ Toda decisión relevante se registra como ADR antes de implementarse. Están en 
 | [0006](docs/adr/0006-esquema-versionado-eventos.md) | El log exportado es API pública |
 | [0007](docs/adr/0007-render-svg-sobre-secuencia-de-frames.md) | Render SVG sobre la secuencia de frames |
 | [0008](docs/adr/0008-catalogo-primitivas-dsl-arena.md) | Catálogo de primitivas del DSL de la arena |
+| [0009](docs/adr/0009-combate-en-vivo-gestos-ruido-y-contraataque.md) | Combate en vivo: gestos por cursor, ruido ambiental y contraataque |
+| [0010](docs/adr/0010-fluidez-y-capa-efimera-del-render.md) | Fluidez y capa efímera del render (replay ≠ grabación) |
+| [0011](docs/adr/0011-condicion-de-victoria-actos-y-firmas-viables.md) | Condición de victoria: HP del ente, actos y firmas viables |
+| [0012](docs/adr/0012-presion-interrupcion-densidad-y-amenaza-basal.md) | Que la presión exista: interrupción de gestos, densidad y amenaza basal |
 
 Documentación complementaria: [arquitectura y ruta de desarrollo](docs/arquitectura.md), [contrato canónico detallado](docs/contrato.md), [diseño del adaptador web](docs/diseno-adaptador-web.md).
 
@@ -144,3 +158,5 @@ Documentación complementaria: [arquitectura y ruta de desarrollo](docs/arquitec
 Vitest y fast-check. Los invariantes del núcleo van como property tests, no solo como casos de ejemplo: que una propiedad se cumpla para cien entradas generadas dice bastante más que un caso escrito a mano.
 
 Los logs de eventos sirven como fixtures golden — un replay debe producir siempre el mismo estado final, y el mismo SVG byte a byte.
+
+Los números de jugabilidad **se miden, no se estiman**. `apps/web/src/arena/probe.ts` simula corridas completas y deterministas, y sus hallazgos quedan congelados como tests: `enteMaxHp` se propuso a ojo en 500 y era invencible por un factor de tres — el valor real salió de una medición. Cuando un test de esos falla, la respuesta es re-medir, no ajustar el número hasta que pase.
