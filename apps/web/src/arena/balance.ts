@@ -271,6 +271,55 @@ export const VICTORY = tuning({
   actThreeDamageScale: 1.6,
 });
 
+/**
+ * Duración del trazo e interrupción de gestos (ADR 0012).
+ *
+ * Hasta acá el combate no tenía noción de cuánto TARDA un gesto: `attack()` era
+ * instantáneo y el trazo solo existía como una lista de puntos ya terminada. La
+ * interrupción necesita esa duración, porque es exactamente la ventana en la que
+ * el jugador está expuesto — el costo de comprometerse a un trazo caro.
+ *
+ * ⚠️ **Estos cuatro números son el input MENOS validado del archivo.** No salen
+ * de una medición: son estimaciones derivadas de los pisos que el propio
+ * reconocedor impone en `GESTURE`, que es lo más cerca del dato real que se
+ * puede llegar sin instrumentar la arena:
+ *
+ *   - `hold` tiene piso duro: `holdMinMs` = 450. Es el único que no se estima.
+ *   - `straight` recorre ~150 px a ~0,5 px/ms (piso: `minPathPx` 48 a 0,4).
+ *   - `circle` cierra un lazo de `circleMinExtentPx` 90 → perímetro ≈ 283 px.
+ *   - `zigzag` cruza `zigzagMinExtentPx` 200 con ≥3 cambios de sentido → el
+ *     recorrido real ronda los 500 px, y es el trazo más caro del catálogo.
+ *
+ * La sonda (`probe.ts`) barre estos valores justamente porque son estimados: si
+ * la conclusión del ADR 0012 se diera vuelta dentro del rango plausible, no
+ * habría conclusión. **Cuando la arena instrumente trazos reales, re-medir.**
+ */
+export const DRAW = tuning({
+  /** `straight` — el flick. El más barato de ejecutar y el más seguro. */
+  straightMs: 320,
+
+  /** `hold` — piso real del reconocedor (`GESTURE.holdMinMs` = 450) + margen. */
+  holdMs: 500,
+
+  /** `circle` — el lazo. Rango plausible: 600–900. */
+  circleMs: 760,
+
+  /** `zigzag` — la sierra. El `cost 5` del catálogo. Rango plausible: 950–1400. */
+  zigzagMs: 1180,
+
+  /**
+   * Recuperación tras una interrupción: ms sin poder iniciar otro trazo.
+   *
+   * El tercero de los tres costos de ser interrumpido (tiempo invertido +
+   * ventana de peligro + stagger). **La interrupción NO cobra cooldown**: no se
+   * emitió firma y no hubo exposición, y el ADR 0009 ya fijó que no se le cobra
+   * al jugador lo que no atacó. Cobrar además el cooldown volvería los gestos
+   * caros injugables en el Acto III — se los quiere ESCASOS, no extintos.
+   * Rango sano: 200–500.
+   */
+  staggerMs: 300,
+});
+
 /** Contraataque materializado (ADR 0009 §4). */
 export const COUNTER = tuning({
   /** Cadencia base en ms con UN cluster adaptado. Rango sano: 7000–12000. */
