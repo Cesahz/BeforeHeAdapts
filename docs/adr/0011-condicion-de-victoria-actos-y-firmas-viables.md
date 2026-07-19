@@ -94,10 +94,18 @@ Escalar los diales no alcanza, y el argumento es de la casa: **los actos son el 
 
 Es barato y además canónico: el HP del ente se deriva del log, así que **el acto también es derivable en los frames**. Por lo tanto:
 
-- **Capa canónica** — restyle discreto del ente al cruzar el umbral, reusando el vocabulario de deformación que ya existe. Al vivir en los frames, **los replays muestran la transición también**.
+- **Capa canónica** — restyle discreto del ente al cruzar el umbral, reusando el vocabulario de deformación que ya existe. Al vivir en los frames, **los replays muestran la transición también**. ⏳ **Pendiente**, ver abajo.
 - **Capa efímera** — florituras del cruce, solo en vivo (ADR 0010, enmienda 1: cada capa dueña de su tramo).
-- **HUD** — indicador de acto, permanente.
-- **Audio** — sting del cruce.
+- **HUD** — indicador de acto, permanente. ✅
+- **Audio** — sting del cruce. ⏳ Pendiente (no hay capa de audio todavía en la arena).
+
+##### Estado de la implementación y la deuda que queda
+
+Implementado: escalada de diales por acto, indicador permanente en el HUD, tinte del acto sobre el bloque de la carrera y narración del cruce en la bitácora, una sola vez. **En vivo, la transición ya es un momento.**
+
+Falta la mitad canónica, y no es un olvido sino un problema de frontera que apareció al implementar: **`packages/visualizer` es agnóstico de dominio y no sabe qué es un acto ni un HP.** Meter el acto en `Frame` repetiría dentro del visualizador el error que este mismo ADR evita en `packages/core`. La salida correcta es que la arena derive el HP del log —es derivable: la fórmula de daño está en `room.ts` y todos sus insumos salen del replay— y le pase el acto al render como opción, igual que ya hace con `theme` y `ephemeralOwnedSeqs`.
+
+Es una pieza propia, delimitada, y hasta que exista **un replay exportado no muestra los cruces de acto**. El combate en vivo sí.
 
 ### 5. Por qué esto crea decisiones que hoy no existen
 
