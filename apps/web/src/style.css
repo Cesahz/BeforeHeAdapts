@@ -20,10 +20,7 @@ body {
   overflow: hidden;
 }
 
-/* El combate se queda con la pantalla y la UI flota encima.
-   La escena es cuadrada porque el viewBox del visualizador lo es: dejarla
-   estirarse deformaría el ente. Se centra y toma el lado menor de la ventana,
-   así que el jugador siempre ve la arena entera sin scrollear. */
+/* El combate se queda con la pantalla y la UI flota encima. */
 #arena {
   position: relative;
   width: 100vw;
@@ -31,7 +28,22 @@ body {
   overflow: hidden;
 }
 
+/* LA ESCENA ES TODA LA VENTANA. No es lo mismo que el cuadro del ente, y la
+   diferencia importa: la escena es la superficie donde se puede TRAZAR.
+
+   Antes las dos cosas eran el mismo elemento cuadrado, así que en un monitor
+   ancho los tercios laterales eran pared invisible — el cursor dejaba de
+   responder a mitad de camino sin nada que lo explicara. El autor lo reportó
+   como "el cursor queda en el límite del medio", y era exactamente eso. */
 .escena {
+  position: absolute;
+  inset: 0;
+}
+
+/* El cuadro del ente: centrado y cuadrado, porque el viewBox del visualizador
+   lo es y estirarlo lo deformaría. Es SOLO dónde se dibuja el ente; no acota
+   dónde puede moverse el jugador. */
+.lienzo {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -40,41 +52,40 @@ body {
   height: min(100vw, 100vh);
 }
 
-.escena svg {
+.lienzo svg {
   width: 100%;
   height: auto;
   display: block;
 }
 
 /* --- Capas flotantes de UI ---------------------------------------------
-   Las tres viven sobre la escena. Solo el cajón captura el puntero por
-   defecto: el HUD y la bitácora son lectura, y si interceptaran clics
-   robarían tramos del trazo justo en los bordes de la arena. */
+   Ahora que la escena es toda la ventana, estas tres son las ÚNICAS zonas
+   donde no se traza: son ventanas, no arena. Por eso capturan el puntero en
+   vez de dejarlo pasar — si lo dejaran pasar, arrastrar sobre el HUD contaría
+   como parte del gesto y el jugador estaría atacando sin querer cada vez que
+   mira su vida. Son las "ventanas" que el trazado omite, y nada más. */
+
+#arena > .hud,
+#arena > .bitacora {
+  position: absolute;
+  z-index: 2;
+  background: rgba(5, 7, 10, 0.82);
+  /* Ventana, no arena: el cursor lo dice antes de que el jugador pruebe. */
+  cursor: default;
+}
 
 #arena > .hud {
-  position: absolute;
   top: 16px;
   left: 16px;
   width: 240px;
-  z-index: 2;
-  background: rgba(5, 7, 10, 0.82);
-  pointer-events: none;
-}
-
-/* Los elementos del HUD sí son botones: se les devuelve el puntero. */
-#arena > .hud button {
-  pointer-events: auto;
 }
 
 #arena > .bitacora {
-  position: absolute;
   bottom: 16px;
   left: 16px;
   width: 320px;
   max-height: 40vh;
   overflow: hidden;
-  z-index: 2;
-  pointer-events: none;
 }
 
 /* --- Cajón deslizable (arsenal) --- */
@@ -394,15 +405,15 @@ input[type="text"] {
   color: var(--asimilado);
 }
 
-/* La capa efímera se apila sobre el lienzo canónico con el mismo viewBox, así
-   que las coordenadas de las dos significan lo mismo. `pointer-events: none`
-   es obligatorio: si el overlay capturara el puntero, el muestreo de trazos —
-   que escucha en la escena — dejaría de recibir eventos y el combate entero
-   dejaría de funcionar. */
-.escena {
-  position: relative;
-}
+/* La capa efímera cubre la ESCENA ENTERA, no solo el cuadro del ente: un
+   ataque lanzado desde el borde de un monitor ancho nace fuera del cuadro y
+   tiene que poder dibujarse igual. Su `viewBox` se recalcula por tamaño desde
+   `main.ts` de modo que el cuadro del ente siga ocupando `[0, size]²` — las
+   coordenadas de las dos capas siguen significando lo mismo (ADR 0010 §2).
 
+   `pointer-events: none` es obligatorio: si el overlay capturara el puntero, el
+   muestreo de trazos —que escucha en la escena— dejaría de recibir eventos y el
+   combate entero dejaría de funcionar. */
 .escena .efimero {
   position: absolute;
   inset: 0;

@@ -21,6 +21,7 @@ import { centerOf } from "@beforeheadapts/visualizer";
 import { Hud, hudModelOf } from "./view/hud.js";
 import { LiveView } from "./view/live.js";
 import { arenaTheme } from "./view/theme.js";
+import { scaleOf, toSvg, viewBoxAttr, viewBoxOf } from "./view/viewport.js";
 import { attachPointer } from "./view/pointer.js";
 import { pruneTracers, renderEphemeral, type Tracer } from "./view/ephemeral.js";
 
@@ -125,8 +126,32 @@ const view = new LiveView(lienzo, {}, { theme: arenaTheme });
 // aprendió — dos artefactos distintos con dos nombres distintos.
 const overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 overlay.setAttribute("class", "efimero");
-overlay.setAttribute("viewBox", `0 0 ${arenaTheme.size} ${arenaTheme.size}`);
 escena.append(overlay);
+
+/**
+ * Las dos cajas del combate. Confundirlas ES el bug de la pared invisible:
+ * la escena es toda la ventana (dónde se puede trazar), el lienzo es el
+ * cuadrado centrado donde vive el ente (el sistema del visualizador).
+ */
+const cajas = (): { escena: DOMRect; cuadro: DOMRect } => ({
+  escena: escena.getBoundingClientRect(),
+  cuadro: lienzo.getBoundingClientRect(),
+});
+
+/**
+ * Ajusta el `viewBox` de la capa efímera para que cubra la ventana ENTERA,
+ * manteniendo el cuadro del ente en `[0, size]²` (ADR 0010 §2).
+ *
+ * Se recalcula al cambiar el tamaño, no por cuadro: es layout, y leerlo a 60 Hz
+ * fuerza un reflow por cuadro para un valor que casi nunca cambia.
+ */
+function sincronizarOverlay(): void {
+  const { escena: caja, cuadro } = cajas();
+  overlay.setAttribute("viewBox", viewBoxAttr(viewBoxOf(caja, cuadro, arenaTheme.size)));
+}
+
+sincronizarOverlay();
+new ResizeObserver(sincronizarOverlay).observe(escena);
 
 const CENTER = centerOf(arenaTheme);
 
@@ -156,9 +181,7 @@ function faseParaDibujar(): CounterPhase {
 
 /** El radio del disco, en unidades del SVG. Mismo motivo que arriba. */
 function radioDeImpactoSvg(): number {
-  const caja = escena.getBoundingClientRect();
-  const escala = caja.width === 0 ? 1 : arenaTheme.size / caja.width;
-  return COUNTER.strikeRadiusPx * escala;
+  return COUNTER.strikeRadiusPx * scaleOf(cajas().cuadro, arenaTheme.size);
 }
 let tracers: readonly Tracer[] = [];
 let cursor: { x: number; y: number } | undefined;
@@ -166,17 +189,21 @@ let cursor: { x: number; y: number } | undefined;
 let cursorPx: { x: number; y: number } | undefined;
 
 /**
- * Píxeles del contenedor → unidades del SVG.
+ * Píxeles relativos a la escena → unidades del SVG.
  *
- * El SVG escala a `width: 100%`, así que el factor es el ancho del contenedor
- * contra `theme.size`. Sin esta conversión el ataque nacería en un lugar
- * distinto del que apuntó el jugador salvo que la ventana midiera exactamente
- * `arenaTheme.size` píxeles — es decir, prácticamente nunca.
+ * El origen del sistema es la esquina del CUADRO DEL ENTE, no la de la escena.
+ * Por eso hay que restar el desplazamiento entre las dos cajas: sin eso, un
+ * ataque lanzado desde el borde izquierdo de un monitor ancho nacería corrido
+ * varios cientos de unidades hacia la derecha del lugar donde el jugador
+ * apuntó.
+ *
+ * Fuera del cuadro del ente el resultado es negativo o mayor que `size`, y eso
+ * es correcto y deliberado: el viewBox extendido de la capa efímera cubre esa
+ * zona.
  */
 function aSvg(x: number, y: number): { x: number; y: number } {
-  const caja = escena.getBoundingClientRect();
-  const escala = caja.width === 0 ? 1 : arenaTheme.size / caja.width;
-  return { x: x * escala, y: y * escala };
+  const { escena: caja, cuadro } = cajas();
+  return toSvg({ x, y }, caja, cuadro, arenaTheme.size);
 }
 
 // --- Botones de ataque -------------------------------------------------------
