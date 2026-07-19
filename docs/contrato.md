@@ -8,7 +8,7 @@ Semántica de referencia del núcleo. `packages/core/src/contract.test.ts` es su
 - **Firma de estímulo (`StimulusSignature`):** forma canónica del estímulo producida por el puerto `StimulusTranslator`. Vector de primitivas + intensidad + metadatos. La canonicalización garantiza que composiciones equivalentes producen la misma firma sin importar el orden de construcción.
 - **Granularidad de firma:** el dial de dificultad del sistema. Demasiado fina → nada se repite, el ente nunca adapta. Demasiado gruesa → todo colapsa a pocas firmas, adapta en minutos. Es parámetro de `policy`, no constante.
 - **Exposición procesada:** el estímulo completó su efecto observable sobre el ente. Estímulos truncados aportan información parcial a la firma pero NO incrementan el contador de exposiciones (ajustable por política).
-- **Complejidad `c`:** número de dimensiones activas de la firma + distancia de novedad respecto a clusters conocidos.
+- **Complejidad `c`:** número de dimensiones activas de la firma. (La implementación vigente, fijada en [ADR 0002](adr/0002-identidad-de-cluster-y-formula-de-N.md), usa exactamente eso: `N(c) = |primitivas|`. La "distancia de novedad" que una versión anterior de esta definición mencionaba NO participa de `N(c)`: la novedad se maneja aparte, vía generalización R6.)
 - **Cluster:** grupo de firmas cercanas según `SignatureSpace.sim()`. La adaptación se contabiliza por cluster, no por firma exacta.
 
 ## Las 6 reglas
