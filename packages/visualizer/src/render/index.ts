@@ -249,7 +249,7 @@ function incomingLayer(
   // adaptado está el cluster, menos hondo llega — la resistencia se VE como
   // profundidad, que es lo que un número en un HUD nunca comunica.
   const surface = polar(center, coreRadius, bearing);
-  const depth = polar(center, coreRadius * (1 - 0.45 * eff), bearing);
+  const depth = polar(center, coreRadius * (1 - theme.impactDepth * eff), bearing);
   const impacto = [
     el("line", {
       class: "impact",

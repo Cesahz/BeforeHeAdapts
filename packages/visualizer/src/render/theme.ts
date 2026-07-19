@@ -46,6 +46,13 @@ export interface Theme {
   readonly threadOpacity: number;
   /** Grosor del vector entrante con efectividad plena. */
   readonly incomingWidth: number;
+  /**
+   * Cuánto penetra el impacto en el ente con `eff = 1`, como fracción del radio
+   * (ADR 0010, enmienda 1). Con `eff` cerca del piso apenas roza la superficie:
+   * la resistencia se lee como PROFUNDIDAD, que es lo que un número en un HUD
+   * nunca comunica.
+   */
+  readonly impactDepth: number;
   /** Frames que dura la contracción del ente, y cuánto se encoge. */
   readonly contractionSpan: number;
   readonly contractionPeak: number;
@@ -91,6 +98,7 @@ export const defaultTheme: Theme = Object.freeze({
   similarityThreshold: 0.3,
   threadOpacity: 0.4,
   incomingWidth: 6,
+  impactDepth: 0.45,
   contractionSpan: 3,
   contractionPeak: 0.12,
   shockwaveSpan: 4,

@@ -173,7 +173,9 @@ type Lanzable = Pick<Prefab, "name" | "composition">;
 
 function lanzar(lanzable: Lanzable): void {
   try {
-    const outcome = room.attack(lanzable.composition, now());
+    // Por la sesión y no por la sala: es lo que engancha los `CounterReady` al
+    // arsenal. Atacando la sala directo, el ente adaptaba y no armaba nada.
+    const outcome = session.attack(lanzable.composition, now());
     log(
       `${lanzable.name} — daño ${outcome.damage.toFixed(2)} · ` +
         `eff ${outcome.effApplied.toFixed(3)} · ` +

@@ -245,6 +245,15 @@ export const COUNTER = tuning({
    * contraataque compite por foco, no por destreza. Rango sano: 45–80.
    */
   strikeRadiusPx: 60,
+
+  /**
+   * Rate-limit propio del contraataque de ruido, en ms (ADR 0009 §4).
+   *
+   * Independiente de la cadencia: una vez que el ente adaptó `elem:ambient`,
+   * agitarse lo invoca fuera de turno. Sin este piso, un jugador nervioso
+   * recibiría un golpe por cuadro. Rango sano: 2500–5000.
+   */
+  ambientCooldownMs: 3000,
 });
 
 /** Capa efímera del render: lo que se ve en vivo y no va al replay (ADR 0010 §2). */

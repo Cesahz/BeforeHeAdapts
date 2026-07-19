@@ -183,6 +183,25 @@ export class CombatSession {
   }
 
   /**
+   * Lanza una composición DELIBERADA: un prefab o una build del Builder.
+   *
+   * Existe porque el arsenal se llena leyendo los `CounterReady` del lote, y esa
+   * lectura vive acá. Antes la arena atacaba la sala directamente para los
+   * prefabs, así que un jugador que solo usara el Builder podía adaptarle ocho
+   * clusters al ente **sin que el ente armara un solo contraataque**: el motor
+   * emitía los `CounterReady` y no los escuchaba nadie. Lo encontró el test del
+   * planificador al no poder construirse un arsenal por la puerta pública.
+   *
+   * Levanta `CooldownError` como la sala: es la misma operación, con el arsenal
+   * enganchado.
+   */
+  attack(composition: Composition, now: number): AttackOutcome {
+    const outcome = this.#room.attack(composition, now);
+    this.#absorb(outcome.events);
+    return outcome;
+  }
+
+  /**
    * Intenta lanzar un trazo.
    *
    * Las dos compuertas están **antes** de la sala, en este orden: reconocer y

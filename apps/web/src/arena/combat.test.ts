@@ -241,4 +241,20 @@ describe("arsenal (ADR 0009 §4)", () => {
     for (let i = 0; i < 5; i += 1) session.attemptGesture(trazoRecto(i * espera), i * espera);
     expect(session.arsenal).toHaveLength(1);
   });
+
+  // Regresión. La arena atacaba la sala DIRECTO para los prefabs y las builds
+  // del Builder, y el arsenal se llena leyendo los `CounterReady` del lote, que
+  // es una lectura de la sesión. Resultado: un jugador que solo usara el
+  // Builder podía adaptarle ocho clusters al ente sin que el ente armara un
+  // solo contraataque. El motor emitía los avisos y no los escuchaba nadie.
+  it("una composición deliberada arma el arsenal igual que un gesto", () => {
+    const session = new CombatSession();
+    const composicion = compositionFor("straight", session.element);
+    const espera = cooldownOf(composicion);
+
+    session.attack(composicion, 0);
+    session.attack(composicion, espera);
+
+    expect(session.arsenal).toHaveLength(1);
+  });
 });
