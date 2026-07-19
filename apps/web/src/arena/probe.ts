@@ -116,6 +116,17 @@ export interface ProbeResult {
   readonly shots: number;
   /** Clusters que el ente adaptó: el tamaño final de su arsenal. */
   readonly arsenal: number;
+  /**
+   * Fracción del daño total que el jugador infligió ANTES del primer
+   * contraataque. **Es la métrica que decide si la presión temprana funcionó.**
+   *
+   * Mide el arranque en frío. Si es alta, la carrera se resolvió en un tramo
+   * donde el ente no era una amenaza de ninguna clase, y ningún dial de densidad
+   * tardía lo cambia: amontonar más golpes al final es agregar presión donde ya
+   * no queda partida que decidir. Bajarla es el objetivo explícito del tercer
+   * dial del ADR 0012.
+   */
+  readonly coldDamageFraction: number;
 }
 
 /** Mejor firma disponible: la de mayor efectividad esperada que esté fuera de cooldown. */
@@ -160,6 +171,7 @@ export function probe(options: ProbeOptions): ProbeResult {
   let hitsTaken = 0;
   let dodges = 0;
   let firstShotMs: number | null = null;
+  let coldDamage = 0;
   let now = 0;
 
   while (!session.finished && now < MAX_MS) {
@@ -222,8 +234,11 @@ export function probe(options: ProbeOptions): ProbeResult {
     if (player.kind === "stagger" && now >= player.until) player = { kind: "idle" };
 
     if (player.kind === "drawing" && now >= player.endsAt) {
-      session.attack(player.entry.composition, now);
+      const outcome = session.attack(player.entry.composition, now);
       attacks += 1;
+      // El daño "en frío": el que se saca mientras el ente todavía no puede
+      // devolver un solo golpe. Es la parte de la carrera que hoy se juega sola.
+      if (firstShotMs === null) coldDamage += outcome.damage;
       player = { kind: "idle" };
     } else if (player.kind === "idle") {
       const entry = pick(session, now, options.order);
@@ -235,11 +250,13 @@ export function probe(options: ProbeOptions): ProbeResult {
     now += STEP_MS;
   }
 
+  const dealt = VICTORY.enteMaxHp - session.enteHp;
+
   return {
     label: `${options.order}/${options.policy}${options.interruption ? "" : " (sin interrupción)"}`,
     outcome: session.outcome,
     elapsedMs: now,
-    damageDealt: VICTORY.enteMaxHp - session.enteHp,
+    damageDealt: dealt,
     enteHp: session.enteHp,
     playerHp: session.hp,
     attacks,
@@ -252,6 +269,7 @@ export function probe(options: ProbeOptions): ProbeResult {
     firstShotMs,
     shots: scheduler.shots,
     arsenal: session.arsenal.length,
+    coldDamageFraction: dealt === 0 ? 0 : coldDamage / dealt,
   };
 }
 

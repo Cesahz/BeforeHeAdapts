@@ -43,6 +43,27 @@ describe("la mitad de presión no existe (el agujero que el ADR 0011 no midió)"
     expect(r.attacks).toBeGreaterThan(50);
   });
 
+  it("el 80 % del daño que decide la carrera se inflige EN FRÍO", () => {
+    // La medición que ordena el ADR 0012. No es que la presión sea poca: es que
+    // llega cuando la partida ya está jugada. Ningún dial de densidad tardía
+    // arregla esto — amontonar golpes al final es agregar presión donde ya no
+    // queda carrera que decidir. Por eso el tercer dial (amenaza basal) existe.
+    const r = probe({ ...inteligente, interruption: false });
+
+    expect(r.coldDamageFraction).toBeGreaterThan(0.7);
+  });
+
+  it("y jugar BIEN aumenta la fracción en frío: la inversión perversa", () => {
+    // El hallazgo más incómodo de la sonda. El orden ingenuo tarda más, así que
+    // le da tiempo al ente a despertarse y pelea ~65 % de su daño bajo amenaza.
+    // El competente termina antes de que eso pase. Hoy, jugar bien no es
+    // sobrevivir a la presión: es esquivarla cerrando la carrera en frío.
+    const competente = probe({ ...inteligente, interruption: false });
+    const ingenuo = probe({ order: "ingenuo", policy: "calculador", interruption: false });
+
+    expect(competente.coldDamageFraction).toBeGreaterThan(ingenuo.coldDamageFraction);
+  });
+
   it("el ente recién empieza a contraatacar pasada la mitad de la corrida", () => {
     // El arsenal del ente arranca vacío y solo se llena con `AdaptationCompleted`,
     // así que su reloj ni siquiera corre hasta la primera adaptación. La presión
