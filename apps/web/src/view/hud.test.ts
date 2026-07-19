@@ -152,3 +152,50 @@ describe("la derrota congela la corrida", () => {
     expect(session.hp).toBe(0);
   });
 });
+
+describe("la carrera en el HUD (ADR 0011)", () => {
+  it("el contador de firmas está en pantalla desde el primer cuadro", () => {
+    // Requisito (b) del ADR 0011 §2 bis: revelar el recurso a mitad de corrida
+    // es lo que haría sentir injusta la derrota por agotamiento. Tiene que
+    // estar antes del primer golpe, no aparecer cuando ya es tarde.
+    const model = hudModelOf(new CombatSession(), 0);
+
+    expect(model.viable).toBeGreaterThan(0);
+    expect(model.weakened).toBe(0);
+    expect(model.act).toBe(1);
+    expect(model.outcome).toBe("ongoing");
+  });
+
+  it("la vida del ente arranca llena y baja al golpearlo", () => {
+    const session = new CombatSession();
+    expect(hudModelOf(session, 0).enteHpFraction).toBe(1);
+
+    session.attack({ element: "ember", vector: "projectile" }, 0);
+
+    const model = hudModelOf(session, 0);
+    expect(model.enteHpFraction).toBeLessThan(1);
+    expect(model.enteHp).toBe(session.enteHp);
+  });
+
+  it("el titular baja y las debilitadas suben cuando el ente adapta", () => {
+    const session = new CombatSession();
+    const antes = hudModelOf(session, 0);
+
+    let now = 0;
+    for (let i = 0; i < 6; i += 1) {
+      now = session.attack({ element: "frost", vector: "projectile" }, now).readyAt;
+    }
+    const despues = hudModelOf(session, now);
+
+    expect(despues.viable).toBeLessThan(antes.viable);
+    expect(despues.weakened).toBeGreaterThan(0);
+    // El total no cambia: las firmas no desaparecen, se debilitan.
+    expect(despues.viable + despues.weakened).toBe(antes.viable + antes.weakened);
+  });
+
+  it("distingue las dos derrotas, porque son lecciones opuestas", () => {
+    const muerto = new CombatSession();
+    muerto.hurt(PLAYER.maxHp);
+    expect(hudModelOf(muerto, 0).outcome).toBe("defeat-slain");
+  });
+});

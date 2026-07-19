@@ -16,8 +16,8 @@
 
 import { ELEMENTS, type Element } from "@beforeheadapts/arena-dsl";
 
-import { PLAYER } from "../arena/balance.js";
-import type { CombatSession } from "../arena/combat.js";
+import { PLAYER, VICTORY } from "../arena/balance.js";
+import type { Act, CombatSession, RunOutcome } from "../arena/combat.js";
 import type { GestureKind } from "../gesture/recognize.js";
 
 /** Los cuatro gestos, en el orden en que se muestran. */
@@ -49,6 +49,21 @@ export interface HudModel {
   /** Fracción de vida en `[0, 1]`. */
   readonly hpFraction: number;
   readonly defeated: boolean;
+  /** Vida del ente: la línea de llegada (ADR 0011 §1). */
+  readonly enteHp: number;
+  readonly enteHpFraction: number;
+  /** En qué acto va el encuentro. Se muestra siempre, no solo al cruzar. */
+  readonly act: Act;
+  /**
+   * Firmas que todavía rinden. **El instrumento de tensión principal**, y va en
+   * pantalla desde el primer cuadro: revelarlo a mitad de corrida es
+   * exactamente lo que haría sentir injusta la derrota por agotamiento
+   * (ADR 0011 §2 bis (b)).
+   */
+  readonly viable: number;
+  /** Las que existen pero ya no rinden. El contador es honesto y las muestra aparte. */
+  readonly weakened: number;
+  readonly outcome: RunOutcome;
   readonly element: Element;
   readonly elements: readonly Element[];
   readonly gestures: readonly GestureStatus[];
@@ -90,11 +105,19 @@ export function hudModelOf(session: CombatSession, now: number, fps = 0): HudMod
     };
   });
 
+  const vocabulary = session.vocabulary;
+
   return {
     hp: session.hp,
     maxHp: PLAYER.maxHp,
     hpFraction: session.hp / PLAYER.maxHp,
     defeated: session.defeated,
+    enteHp: session.enteHp,
+    enteHpFraction: session.enteHp / VICTORY.enteMaxHp,
+    act: session.act,
+    viable: vocabulary.viable,
+    weakened: vocabulary.weakened,
+    outcome: session.outcome,
     element: session.element,
     // Los 8 jugables. `ambient` NO va acá: es lo que el ente percibe del
     // jugador, no algo que el jugador pueda lanzar (ADR 0009 §2).
@@ -107,6 +130,19 @@ export function hudModelOf(session: CombatSession, now: number, fps = 0): HudMod
     fps,
   };
 }
+
+/** Qué dice el marcador de vida según cómo terminó (o no) la corrida. */
+const ESTADO: Readonly<Record<RunOutcome, (hp: number, maxHp: number) => string>> = {
+  ongoing: (hp, maxHp) => `vida ${Math.ceil(hp)} / ${maxHp}`,
+  victory: () => "lo tumbaste",
+  "defeat-slain": () => "el ente te mató",
+  // El texto tiene que nombrar la causa: el jugador perdió por gastar su
+  // vocabulario, no por mala suerte, y esa es la lección que se lleva.
+  "defeat-exhausted": () => "te quedaste sin firmas",
+};
+
+/** Nombre de cada acto. En números romanos porque es una estructura de encuentro. */
+const ACTO: Readonly<Record<Act, string>> = { 1: "acto I", 2: "acto II", 3: "acto III" };
 
 /**
  * El HUD montado sobre un contenedor.
@@ -126,6 +162,10 @@ export class Hud {
   readonly #agitationFill: HTMLElement;
   readonly #arsenal: HTMLElement;
   readonly #fps: HTMLElement;
+  readonly #enteBar: HTMLElement;
+  readonly #enteText: HTMLElement;
+  readonly #act: HTMLElement;
+  readonly #vocab: HTMLElement;
 
   #lastSignature = "";
 
@@ -144,6 +184,33 @@ export class Hud {
     this.#hpBar.className = "hud-barra-relleno";
     barra.append(this.#hpBar);
     vida.append(this.#hpText, barra);
+
+    // --- La carrera: vida del ente, acto y vocabulario restante (ADR 0011) ---
+    //
+    // Va arriba de todo y desde el primer cuadro. Las dos barras enfrentadas
+    // SON la carrera: la del jugador baja por los contraataques, la del ente
+    // por los golpes, y el contador de abajo dice cuánto vocabulario queda para
+    // seguir empujando. Los tres números juntos o ninguno.
+    const carrera = document.createElement("div");
+    carrera.className = "hud-carrera";
+
+    const enteFila = document.createElement("div");
+    enteFila.className = "hud-ente";
+    this.#enteText = document.createElement("span");
+    this.#enteText.className = "hud-ente-texto";
+    const enteBarra = document.createElement("div");
+    enteBarra.className = "hud-barra hud-barra-ente";
+    this.#enteBar = document.createElement("div");
+    this.#enteBar.className = "hud-barra-relleno hud-barra-relleno-ente";
+    enteBarra.append(this.#enteBar);
+    this.#act = document.createElement("span");
+    this.#act.className = "hud-acto";
+    enteFila.append(this.#enteText, enteBarra, this.#act);
+
+    this.#vocab = document.createElement("div");
+    this.#vocab.className = "hud-vocabulario";
+
+    carrera.append(enteFila, this.#vocab);
 
     // --- Elementos armados ---
     const elementos = document.createElement("div");
@@ -190,7 +257,7 @@ export class Hud {
     this.#agitation.append(this.#agitationFill);
     lectura.append(this.#lastGesture, this.#arsenal, this.#fps, this.#agitation);
 
-    this.element.append(vida, elementos, gestos, lectura);
+    this.element.append(carrera, vida, elementos, gestos, lectura);
   }
 
   /**
@@ -207,11 +274,30 @@ export class Hud {
     if (signature === this.#lastSignature) return;
     this.#lastSignature = signature;
 
-    this.#hpText.textContent = model.defeated
-      ? "el ente ganó"
-      : `vida ${Math.ceil(model.hp)} / ${model.maxHp}`;
+    // Las tres derrotas y la victoria dicen cosas DISTINTAS. "Te mataron" y "te
+    // quedaste sin vocabulario" son lecciones opuestas, y confundirlas es lo
+    // que haría sentir arbitraria a la segunda (ADR 0011 §3).
+    this.#hpText.textContent = ESTADO[model.outcome](model.hp, model.maxHp);
     this.#hpBar.style.width = `${(model.hpFraction * 100).toFixed(1)}%`;
-    this.element.classList.toggle("hud-derrotado", model.defeated);
+    this.element.classList.toggle("hud-derrotado", model.outcome.startsWith("defeat"));
+    this.element.classList.toggle("hud-victoria", model.outcome === "victory");
+
+    this.#enteText.textContent = `ente ${Math.ceil(model.enteHp)}`;
+    this.#enteBar.style.width = `${(model.enteHpFraction * 100).toFixed(1)}%`;
+    this.#act.textContent = ACTO[model.act];
+    // El acto viaja como dato al CSS: el cruce tiene que ser un MOMENTO, no un
+    // dial que sube en silencio (ADR 0011 §4).
+    this.element.dataset["acto"] = String(model.act);
+
+    // El titular cuenta solo lo que rinde; las debilitadas van aparte y nunca
+    // infladas dentro del número grande. Un contador optimista mentiría justo
+    // en el momento de mayor tensión (enmienda P2).
+    this.#vocab.textContent =
+      model.weakened === 0
+        ? `${model.viable} firmas viables`
+        : `${model.viable} firmas viables · +${model.weakened} debilitadas`;
+    this.#vocab.classList.toggle("hud-vocabulario-critico", model.viable > 0 && model.viable <= 4);
+    this.#vocab.classList.toggle("hud-vocabulario-agotado", model.viable === 0);
 
     for (const { element, button } of this.#elementButtons) {
       button.classList.toggle("hud-elemento-armado", element === model.element);

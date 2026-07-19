@@ -330,6 +330,74 @@ input[type="text"] {
   letter-spacing: 0.15em;
 }
 
+/* --- La carrera (ADR 0011) ------------------------------------------------
+   Va arriba de todo el HUD porque es la meta: la barra del ente es la línea de
+   llegada y el contador de firmas es el reloj. El acto tiñe el bloque entero,
+   así que el cruce se nota aunque el jugador esté mirando el combate. */
+
+.hud-carrera {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--tenue);
+}
+
+.hud-ente {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-barra-ente {
+  /* La barra del ente se lee de derecha a izquierda: se vacía hacia la meta. */
+  direction: rtl;
+}
+
+.hud-barra-relleno-ente {
+  background: var(--ente, var(--tinta));
+}
+
+.hud-acto {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--tenue);
+}
+
+/* El acto es un salto discreto y se ve como tal: cada uno tiñe su indicador.
+   Un dial que sube en silencio se experimenta como "de repente todo pega más y
+   no sé por qué", que es opacidad, no dificultad (enmienda P3). */
+.hud[data-acto="2"] .hud-acto {
+  color: var(--aviso, #d8a24a);
+}
+
+.hud[data-acto="3"] .hud-acto {
+  color: var(--asimilado);
+  letter-spacing: 0.24em;
+}
+
+.hud-vocabulario {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+/* Con cuatro firmas o menos el contador deja de ser información y pasa a ser
+   una advertencia. Nunca aparece de golpe: está en pantalla desde el cuadro
+   uno, solo cambia de tono (ADR 0011 §2 bis (b)). */
+.hud-vocabulario-critico {
+  color: var(--aviso, #d8a24a);
+}
+
+.hud-vocabulario-agotado {
+  color: var(--asimilado);
+  letter-spacing: 0.16em;
+}
+
+.hud-victoria .hud-vida-texto {
+  color: var(--tinta);
+  letter-spacing: 0.15em;
+}
+
 .hud-elementos {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

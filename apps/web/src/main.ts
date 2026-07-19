@@ -10,7 +10,7 @@ import { ELEMENTS, cooldownOf, costOf } from "@beforeheadapts/arena-dsl";
 import "./style.css";
 
 import { downloadText } from "./arena/download.js";
-import { CombatSession } from "./arena/combat.js";
+import { CombatSession, type Act, type RunOutcome } from "./arena/combat.js";
 import { CounterScheduler, type CounterPhase } from "./arena/counter.js";
 import { COUNTER } from "./arena/balance.js";
 import { PREFABS, type Prefab } from "./arena/prefabs.js";
@@ -160,6 +160,25 @@ const CENTER = centerOf(arenaTheme);
  * crecía y la vida del jugador no bajaba nunca.
  */
 const scheduler = new CounterScheduler();
+
+/**
+ * Lo último que se narró de la carrera.
+ *
+ * El acto y el desenlace se DERIVAN de la sesión, así que no hacen falta acá
+ * como estado — estas dos variables no son la verdad de nada, solo recuerdan
+ * qué se escribió ya en la bitácora, para no repetirlo sesenta veces por
+ * segundo. Si alguna vez hubiera que consultarlas para decidir algo del juego,
+ * está mal y la respuesta vive en `session`.
+ */
+let actoPrevio: Act = 1;
+let desenlacePrevio: RunOutcome = "ongoing";
+
+/** Cómo se narra cada final. Nombra la causa: es la lección que el jugador se lleva. */
+const DESENLACE: Readonly<Record<Exclude<RunOutcome, "ongoing">, string>> = {
+  victory: "◆ LO TUMBASTE. antes de que se adaptara.",
+  "defeat-slain": "EL ENTE SE ADAPTÓ A VOS. fin de la corrida.",
+  "defeat-exhausted": "SIN FIRMAS VIABLES. te quedaste sin vocabulario y sigue en pie.",
+};
 
 /**
  * El planificador razona en **píxeles de pantalla**, no en unidades del SVG.
@@ -377,15 +396,34 @@ function frame(): void {
   }
 
   // El reloj del ente. Devuelve algo solo en el cuadro en que un golpe resuelve.
-  const golpe = scheduler.poll(t, session.arsenal, cursorPx, cursorPx ?? { x: 0, y: 0 });
+  // El acto entra como parámetro: escala cadencia y daño sin que el
+  // planificador tenga estado propio de la carrera (ADR 0011 §4).
+  const golpe = scheduler.poll(t, session.arsenal, cursorPx, cursorPx ?? { x: 0, y: 0 }, session.act);
   if (golpe !== undefined) {
     if (golpe.hit) {
       session.hurt(golpe.damage);
-      log(`✸ contraataque (${golpe.counter.weakness}) — ${golpe.damage} HP · quedan ${session.hp}`);
+      log(
+        `✸ contraataque (${golpe.counter.weakness}) — ${golpe.damage.toFixed(0)} HP · quedan ${session.hp}`,
+      );
       if (session.defeated) log("EL ENTE SE ADAPTÓ A VOS. fin de la corrida.");
     } else {
       log(`✧ contraataque esquivado (${golpe.counter.weakness})`);
     }
+  }
+
+  // El cruce de acto se narra una sola vez, en el cuadro en que ocurre. Es un
+  // MOMENTO, no un dial que sube en silencio: sin esto, la escalada del
+  // contraataque se siente arbitraria (enmienda P3 del ADR 0011).
+  if (session.act !== actoPrevio) {
+    actoPrevio = session.act;
+    log(`▲ ACTO ${"I".repeat(actoPrevio)} — el ente aprieta.`);
+  }
+
+  // El desenlace se anuncia una sola vez y nombra su causa: "te mataron" y "te
+  // quedaste sin vocabulario" son lecciones opuestas.
+  if (desenlacePrevio === "ongoing" && session.outcome !== "ongoing") {
+    desenlacePrevio = session.outcome;
+    log(DESENLACE[session.outcome]);
   }
 
   view.tick(t);
