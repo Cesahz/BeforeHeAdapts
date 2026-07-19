@@ -75,6 +75,10 @@ Origen: notas del autor (2026-07) + revisión arquitectónica externa.
 
 ---
 
+## 6. Crecimiento, difusión y distribución (Steam incluido)
+
+El estudio completo vive en [`crecimiento-y-difusion.md`](crecimiento-y-difusion.md): mecánicas de retención con veredictos (HUD de progreso, expediente del ente, amague, bono de diversidad, meta-progresión de paleta con su advertencia), la sección pública de documentación del motor en la web, canales de difusión 2026, e itch.io → Steam con sus gates. Regla heredada clave: **nada jugable se publica antes de resolver el hallazgo congelado de balance**, y la decisión open/closed source del motor precede a cualquier repo público.
+
 ## Regla de salida del embudo
 
 Para promover cualquier entrada de este documento a trabajo real: (1) su gate cumplido y verificable, (2) ADR propio aceptado, (3) si toca contrato, `sim()`, esquema de eventos o cualquier superficie del núcleo: discusión previa con el autor y la revisión externa, sin excepciones. Este documento se actualiza al agregar ideas nuevas o al promover/descartar existentes — nunca se borran entradas, se les cambia el estado.
