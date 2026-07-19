@@ -21,8 +21,8 @@
 
 import type { Primitive } from "@beforeheadapts/core";
 
-import { COUNTER } from "./balance.js";
-import type { ArmedCounter } from "./combat.js";
+import { COUNTER, VICTORY } from "./balance.js";
+import type { Act, ArmedCounter } from "./combat.js";
 import { AMBIENT_ELEMENT } from "./ambient.js";
 
 export interface Point {
@@ -63,17 +63,45 @@ export interface CounterResolution {
   readonly damage: number;
 }
 
-/** Cadencia según cuántos clusters adaptó el ente. Escala; nunca baja del piso. */
-export function intervalFor(arsenalSize: number): number {
-  if (arsenalSize <= 0) return Infinity;
-  const raw = COUNTER.baseIntervalMs / (1 + COUNTER.intervalAccel * (arsenalSize - 1));
-  return Math.max(COUNTER.minIntervalMs, raw);
+/**
+ * Los dos diales que el acto escala (ADR 0011 §4).
+ *
+ * El acto **no toca el motor ni fuerza adaptaciones**: solo multiplica presión
+ * que ya existía. Es diseño de encuentro, y por eso vive del lado del dominio.
+ */
+function scalesFor(act: Act): { readonly interval: number; readonly damage: number } {
+  // Comparaciones por rango y no un `switch` exhaustivo: el tipo `Act` ya
+  // restringe a 1|2|3, pero esto se llama desde el bucle de render y un valor
+  // inesperado tiene que degradar al Acto I, no devolver `undefined` y
+  // reventar a mitad de un combate.
+  if (act >= 3) {
+    return { interval: VICTORY.actThreeIntervalScale, damage: VICTORY.actThreeDamageScale };
+  }
+  if (act === 2) {
+    return { interval: VICTORY.actTwoIntervalScale, damage: VICTORY.actTwoDamageScale };
+  }
+  return { interval: 1, damage: 1 };
 }
 
-/** Daño según cuántos clusters adaptó el ente. Crece sin techo: la ventana se cierra. */
-export function damageFor(arsenalSize: number): number {
+/**
+ * Cadencia según cuántos clusters adaptó el ente y en qué acto va. Escala;
+ * nunca baja del piso.
+ *
+ * El piso se aplica DESPUÉS del multiplicador de acto, y sigue siendo duro: por
+ * avanzado que esté el encuentro, `minIntervalMs` es el límite de lo que sigue
+ * siendo jugable, no un número de dificultad.
+ */
+export function intervalFor(arsenalSize: number, act: Act = 1): number {
+  if (arsenalSize <= 0) return Infinity;
+  const raw = COUNTER.baseIntervalMs / (1 + COUNTER.intervalAccel * (arsenalSize - 1));
+  return Math.max(COUNTER.minIntervalMs, raw * scalesFor(act).interval);
+}
+
+/** Daño según clusters adaptados y acto. Crece sin techo: la ventana se cierra. */
+export function damageFor(arsenalSize: number, act: Act = 1): number {
   if (arsenalSize <= 0) return 0;
-  return COUNTER.baseDamage + COUNTER.damagePerCluster * (arsenalSize - 1);
+  const raw = COUNTER.baseDamage + COUNTER.damagePerCluster * (arsenalSize - 1);
+  return raw * scalesFor(act).damage;
 }
 
 /** Aviso previo según cuántos clusters adaptó el ente. Se acorta; nunca por debajo del piso. */
@@ -140,6 +168,7 @@ export class CounterScheduler {
     arsenal: readonly ArmedCounter[],
     cursor: Point | undefined,
     fallback: Point,
+    act: Act = 1,
   ): CounterResolution | undefined {
     // Sin arsenal el ente no tiene con qué golpear. No es una pausa: es que
     // todavía no aprendió nada, y el reloj recién arranca cuando aprende.
@@ -156,12 +185,12 @@ export class CounterScheduler {
 
     if (this.#phase.kind === "telegraph") {
       if (now < this.#phase.strikeAt) return undefined;
-      return this.#resolve(now, arsenal, cursor);
+      return this.#resolve(now, arsenal, cursor, act);
     }
 
     // Fase idle: o se agenda el primer golpe, o cae el que estaba agendado.
     if (this.#nextAt === undefined) {
-      this.#nextAt = now + intervalFor(arsenal.length);
+      this.#nextAt = now + intervalFor(arsenal.length, act);
       return undefined;
     }
     if (now >= this.#nextAt) {
@@ -214,6 +243,7 @@ export class CounterScheduler {
     now: number,
     arsenal: readonly ArmedCounter[],
     cursor: Point | undefined,
+    act: Act,
   ): CounterResolution {
     const fase = this.#phase as Extract<CounterPhase, { kind: "telegraph" }>;
 
@@ -225,14 +255,14 @@ export class CounterScheduler {
       cursor === undefined ||
       Math.hypot(cursor.x - fase.at.x, cursor.y - fase.at.y) <= COUNTER.strikeRadiusPx;
 
-    const damage = hit ? damageFor(arsenal.length) : 0;
+    const damage = hit ? damageFor(arsenal.length, act) : 0;
 
     this.#shots += 1;
     this.#phase = { kind: "strike", counter: fase.counter, at: fase.at, until: now + COUNTER.strikeMs, hit };
     // La cadencia se reagenda desde la resolución, no desde el disparo: así el
     // intervalo es tiempo de RESPIRO entre golpes y no incluye el aviso previo,
     // que es justo el tramo en que el jugador ya está bajo presión.
-    this.#nextAt = now + intervalFor(arsenal.length);
+    this.#nextAt = now + intervalFor(arsenal.length, act);
 
     return { counter: fase.counter, at: fase.at, hit, damage };
   }

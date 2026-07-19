@@ -39,7 +39,9 @@ const CENTRO = { x: 500, y: 500 };
 
 describe("escalada del contraataque", () => {
   it("acelera la cadencia con cada cluster adaptado y respeta el piso", () => {
-    const intervalos = [1, 2, 4, 8, 20].map(intervalFor);
+    // Con `.map(intervalFor)` el índice entraría como segundo argumento y sería
+    // el ACTO, no el tamaño del arsenal. La lambda explícita no es ruido.
+    const intervalos = [1, 2, 4, 8, 20].map((size) => intervalFor(size));
     for (let i = 1; i < intervalos.length; i += 1) {
       expect(intervalos[i]!).toBeLessThanOrEqual(intervalos[i - 1]!);
     }

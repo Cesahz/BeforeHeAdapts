@@ -219,11 +219,23 @@ export const VICTORY = tuning({
   /**
    * Vida del ente. Bajarla a cero es la única victoria.
    *
-   * Calibrada a ojo para una run de 5-15 min (ADR 0011 §2 bis (a)): agotarse en
-   * el Acto I de una run de 10 minutos es una lección; en una de 40, un
-   * rage-quit. Rango sano: 300–900.
+   * **Este número sí se midió**, y es lo único de este bloque que no es a ojo.
+   * El objetivo del ADR 0011 §6 es ponerlo *entre* el daño extraíble jugando
+   * bien y el que se extrae jugando mal. Con el catálogo actual, una sonda de
+   * sesión completa dio:
+   *
+   *   - orden inteligente (siempre la firma más efectiva): **168 de daño**
+   *   - orden ingenuo (recorre el vocabulario quemando parientes): **107**
+   *
+   * 150 deja al inteligente ganando con ~11 % de margen y al ingenuo perdiendo
+   * sin discusión, que es exactamente "el spam pierde, la secuenciación gana".
+   * El primer valor propuesto era 500: invencible por un factor de tres, y solo
+   * se supo midiendo.
+   *
+   * ⚠️ Depende del catálogo del ADR 0008. Si cambian gestos o elementos, este
+   * número hay que volver a medirlo — no ajustarlo a ojo. Rango sano: 110–165.
    */
-  enteMaxHp: 500,
+  enteMaxHp: 150,
 
   /**
    * Efectividad esperada por debajo de la cual una firma deja de contar como

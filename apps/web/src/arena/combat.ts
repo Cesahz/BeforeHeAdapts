@@ -22,8 +22,9 @@ import type { EngineEvent, Primitive, StimulusSignature } from "@beforeheadapts/
 import { cooldownOf, type Composition, type Element } from "@beforeheadapts/arena-dsl";
 
 import { AMBIENT_SIGNATURE } from "./ambient.js";
-import { PLAYER } from "./balance.js";
+import { PLAYER, VICTORY } from "./balance.js";
 import { Room, type AttackOutcome } from "./room.js";
+import { vocabularyOf, type Vocabulary } from "./vocabulary.js";
 import {
   compositionFor,
   recognize,
@@ -56,6 +57,30 @@ export type GestureAttempt =
  */
 export type ExposureOutcome = Omit<AttackOutcome, "composition" | "readyAt">;
 
+/**
+ * En qué acto está el encuentro (ADR 0011 §4).
+ *
+ * Derivado del HP del ente, que a su vez se deriva del log: el acto no es
+ * estado guardado en ningún lado, y por eso un replay puede reconstruirlo.
+ */
+export type Act = 1 | 2 | 3;
+
+/**
+ * Cómo terminó la corrida, o que sigue viva.
+ *
+ * Las dos derrotas son distintas a propósito y la UI **tiene** que
+ * distinguirlas: "te mataron" y "te quedaste sin vocabulario" son lecciones
+ * opuestas, y confundirlas es lo que haría sentir injusta a la segunda.
+ */
+export type RunOutcome =
+  | "ongoing"
+  /** El HP del ente llegó a cero. La única victoria. */
+  | "victory"
+  /** El HP del jugador llegó a cero (ADR 0009 §3). */
+  | "defeat-slain"
+  /** Se acabaron las firmas viables con el ente en pie (ADR 0011 §3). */
+  | "defeat-exhausted";
+
 /** Una entrada del arsenal: un contraataque disponible, armado por `CounterReady`. */
 export interface ArmedCounter {
   readonly weakness: Primitive;
@@ -71,6 +96,9 @@ export class CombatSession {
   #element: Element;
   #lastGesture: GestureKind | undefined;
   #hp = PLAYER.maxHp;
+  #enteHp = VICTORY.enteMaxHp;
+  /** Vocabulario memoizado por largo del log: solo cambia cuando entra un evento. */
+  #vocabCache: { readonly at: number; readonly value: Vocabulary } | undefined;
 
   constructor(room: Room = new Room(), element: Element = "ember") {
     this.#room = room;
@@ -111,16 +139,64 @@ export class CombatSession {
     return this.#hp;
   }
 
+  /** Vida del ente. Bajarla a cero es la victoria (ADR 0011 §1). */
+  get enteHp(): number {
+    return this.#enteHp;
+  }
+
   /**
-   * La corrida terminó: el ente ganó.
+   * El vocabulario que le queda al jugador, con su desgaste (ADR 0011 §2).
    *
-   * La derrota es **terminal** (ADR 0009 §3). No se reencarna al jugador ni se
-   * resetea al ente: lo primero anularía la presión que el contraataque ejerce,
-   * y lo segundo crearía el incentivo perverso de suicidarse para borrarle la
-   * adaptación — y por el hallazgo de balance, todo jugador termina acorralado.
+   * Es una proyección pura del estado del motor, memoizada por largo del log:
+   * el HUD la pide por cuadro y solo puede cambiar cuando entra un evento.
+   */
+  get vocabulary(): Vocabulary {
+    const at = this.#room.log.events.length;
+    if (this.#vocabCache?.at !== at) {
+      this.#vocabCache = { at, value: vocabularyOf(this.#room.state) };
+    }
+    return this.#vocabCache.value;
+  }
+
+  /**
+   * En qué acto está el encuentro. Derivado del HP del ente, nunca guardado.
+   *
+   * Es el R1 del dominio: un salto discreto. Que sea derivable es lo que
+   * permite que la transición se dibuje también en un replay (ADR 0011 §4).
+   */
+  get act(): Act {
+    const fraction = this.#enteHp / VICTORY.enteMaxHp;
+    if (fraction > VICTORY.actTwoAt) return 1;
+    if (fraction > VICTORY.actThreeAt) return 2;
+    return 3;
+  }
+
+  /**
+   * Cómo va la corrida. Se evalúa en este orden y el orden importa:
+   * matar al ente con el último golpe de tu último vocabulario es una VICTORIA.
+   */
+  get outcome(): RunOutcome {
+    if (this.#enteHp <= 0) return "victory";
+    if (this.#hp <= 0) return "defeat-slain";
+    if (this.vocabulary.viable === 0) return "defeat-exhausted";
+    return "ongoing";
+  }
+
+  /**
+   * La corrida terminó, de cualquiera de las tres maneras.
+   *
+   * El desenlace es **terminal** (ADR 0009 §3). No se reencarna al jugador ni
+   * se resetea al ente: lo primero anularía la presión que el contraataque
+   * ejerce, y lo segundo crearía el incentivo perverso de suicidarse para
+   * borrarle la adaptación.
    *
    * El log se preserva y sigue exportable: es el artefacto que importa.
    */
+  get finished(): boolean {
+    return this.outcome !== "ongoing";
+  }
+
+  /** El jugador cayó. Se conserva aparte de `finished` porque la UI las trata distinto. */
   get defeated(): boolean {
     return this.#hp <= 0;
   }
@@ -133,7 +209,7 @@ export class CombatSession {
    * aprendió, no lo que hizo.
    */
   hurt(amount: number): void {
-    if (this.defeated) return;
+    if (this.finished) return;
     this.#hp = Math.max(0, this.#hp - amount);
   }
 
@@ -174,11 +250,12 @@ export class CombatSession {
     // Con la corrida terminada el log se congela: nada más entra. Es lo que
     // hace que el replay exportado sea exactamente la corrida y no incluya el
     // movimiento del cursor de alguien mirando la pantalla de derrota.
-    if (this.defeated) return undefined;
+    if (this.finished) return undefined;
     if (!this.#noise.read(now).shouldEmit) return undefined;
     this.#noise.markEmitted(now);
     const outcome = this.#room.expose(AMBIENT_SIGNATURE, now);
     this.#absorb(outcome.events);
+    this.#wound(outcome.damage);
     return outcome;
   }
 
@@ -198,6 +275,7 @@ export class CombatSession {
   attack(composition: Composition, now: number): AttackOutcome {
     const outcome = this.#room.attack(composition, now);
     this.#absorb(outcome.events);
+    this.#wound(outcome.damage);
     return outcome;
   }
 
@@ -209,7 +287,7 @@ export class CombatSession {
    * se entere, así que no hay forma de que llegue al log.
    */
   attemptGesture(points: readonly GesturePoint[], now: number): GestureAttempt {
-    if (this.defeated) return { kind: "rejected", reason: "insuficiente" };
+    if (this.finished) return { kind: "rejected", reason: "insuficiente" };
 
     const recognition = recognize(points);
     if (!recognition.ok) return { kind: "rejected", reason: recognition.reason };
@@ -224,7 +302,21 @@ export class CombatSession {
 
     const outcome = this.#room.attack(composition, now);
     this.#absorb(outcome.events);
+    this.#wound(outcome.damage);
     return { kind: "attacked", gesture, outcome };
+  }
+
+  /**
+   * Acumula daño sobre el ente.
+   *
+   * **No emite ningún evento.** El golpe ya está en el log como
+   * `ResistanceApplied` — que es lo que el ente aprendió — y el HP es una
+   * lectura de dominio sobre esos eventos. Meter un evento nuevo convertiría al
+   * log en un marcador y violaría el ADR 0006 por un concepto que ni siquiera
+   * es del motor (ADR 0011, alternativas descartadas).
+   */
+  #wound(damage: number): void {
+    this.#enteHp = Math.max(0, this.#enteHp - damage);
   }
 
   /** Lee los `CounterReady` del lote y arma el arsenal. El motor avisa; el dominio guarda. */
