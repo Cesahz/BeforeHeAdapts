@@ -246,3 +246,36 @@ export const COUNTER = tuning({
    */
   strikeRadiusPx: 60,
 });
+
+/** Capa efímera del render: lo que se ve en vivo y no va al replay (ADR 0010 §2). */
+export const EPHEMERAL = tuning({
+  /**
+   * Cuánto vive un trazador de ataque, en ms. Es el viaje del cursor al ente.
+   * Rango sano: 260–600. Muy corto no se lee; muy largo se acumulan y ensucian.
+   */
+  tracerMs: 420,
+
+  /**
+   * Cuánto se aparta la curva hacia donde apuntaste, como fracción de la
+   * distancia al ente. 0 sería una recta al ente (la puntería no se vería);
+   * 1 sale casi perpendicular. Rango sano: 0,3–0,8.
+   *
+   * ⚠️ Esto curva el VIAJE, nunca el destino: todo ataque reconocido resuelve
+   * sobre el ente (ADR 0010 §3). Un ataque que se viera fallar mientras el
+   * motor aplica el daño sería el render mintiendo sobre la mecánica.
+   */
+  aimCurve: 0.55,
+
+  /**
+   * Cuánto penetra el ataque en el ente a `eff = 1`, como fracción del radio.
+   * Con `eff` cerca del piso apenas roza la superficie: es el feedback de R5
+   * que el §4 del diseño pide desde la Fase 3a. Rango sano: 0,3–0,9.
+   */
+  maxPenetration: 0.6,
+
+  /** Radio del retículo del cursor, en unidades del SVG. */
+  reticlePx: 9,
+
+  /** Trazadores simultáneos como máximo. Tope duro contra la acumulación. */
+  maxTracers: 12,
+});

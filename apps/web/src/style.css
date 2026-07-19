@@ -324,3 +324,20 @@ input[type="text"] {
 .hud-fps-bajo {
   color: var(--asimilado);
 }
+
+/* La capa efímera se apila sobre el lienzo canónico con el mismo viewBox, así
+   que las coordenadas de las dos significan lo mismo. `pointer-events: none`
+   es obligatorio: si el overlay capturara el puntero, el muestreo de trazos —
+   que escucha en la escena — dejaría de recibir eventos y el combate entero
+   dejaría de funcionar. */
+.escena {
+  position: relative;
+}
+
+.escena .efimero {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

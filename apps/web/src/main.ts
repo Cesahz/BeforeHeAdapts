@@ -15,9 +15,11 @@ import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
 import { Builder } from "./builder/ui.js";
+import { centerOf, defaultTheme } from "@beforeheadapts/visualizer";
 import { Hud, hudModelOf } from "./view/hud.js";
 import { LiveView } from "./view/live.js";
 import { attachPointer } from "./view/pointer.js";
+import { pruneTracers, renderEphemeral, type Tracer } from "./view/ephemeral.js";
 
 const root = document.querySelector<HTMLDivElement>("#arena");
 if (root === null) throw new Error("falta el contenedor #arena");
@@ -44,7 +46,14 @@ escena.className = "escena";
 // El pipeline del visualizador emite un frame POR EVENTO, así que con el log
 // vacío no hay nada que dibujar y el ente recién aparece con el primer golpe.
 // Se avisa en vez de dejar un hueco negro sin explicación.
-escena.innerHTML = `<p class="vacio">el ente todavía no fue expuesto a nada — atacá para despertarlo</p>`;
+
+// El lienzo canónico es un hijo de la escena, no la escena misma: la capa
+// efímera se monta al lado y `LiveView` puede reescribir su innerHTML sin
+// borrarla.
+const lienzo = document.createElement("div");
+lienzo.className = "lienzo";
+lienzo.innerHTML = `<p class="vacio">el ente todavía no fue expuesto a nada — atacá para despertarlo</p>`;
+escena.append(lienzo);
 
 const panel = document.createElement("div");
 panel.className = "panel";
@@ -75,7 +84,37 @@ const hud = new Hud((element) => {
 
 root.append(escena, hud.element, panel);
 
-const view = new LiveView(escena);
+const view = new LiveView(lienzo);
+
+// --- Capa efímera (ADR 0010 §2) ----------------------------------------------
+// Va en un SVG APARTE, encima del canónico y con el mismo viewBox, para que las
+// coordenadas de las dos capas signifiquen lo mismo. Separarlas no es prolijidad:
+// el SVG canónico se reescribe entero cuando cambia el frame, y mezclarlas
+// obligaría a redibujar el ente a 60 fps para mover un proyectil.
+//
+// Esta capa NO va al replay. Es lo que el jugador vive, no lo que el ente
+// aprendió — dos artefactos distintos con dos nombres distintos.
+const overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+overlay.setAttribute("class", "efimero");
+overlay.setAttribute("viewBox", `0 0 ${defaultTheme.size} ${defaultTheme.size}`);
+escena.append(overlay);
+
+const CENTER = centerOf(defaultTheme);
+let tracers: readonly Tracer[] = [];
+let cursor: { x: number; y: number } | undefined;
+
+/**
+ * Píxeles del contenedor → unidades del SVG.
+ *
+ * El SVG escala a `width: 100%`, así que el factor es el ancho del contenedor
+ * contra `theme.size`. Sin esta conversión el ataque nacería en un lugar
+ * distinto del que apuntó el jugador en cuanto la ventana no midiera 600 px.
+ */
+function aSvg(x: number, y: number): { x: number; y: number } {
+  const caja = escena.getBoundingClientRect();
+  const escala = caja.width === 0 ? 1 : defaultTheme.size / caja.width;
+  return { x: x * escala, y: y * escala };
+}
 
 // --- Botones de ataque -------------------------------------------------------
 
@@ -140,6 +179,7 @@ attachPointer(escena, now, {
   // ventana de 32 posiciones del lector de ruido.
   onMove: (x, y, t) => {
     session.observePointer(x, y, t);
+    cursor = aSvg(x, y);
   },
   onStroke: (points, t) => {
     const attempt = session.attemptGesture(points, t);
@@ -160,6 +200,36 @@ attachPointer(escena, now, {
         `${outcome.exposures}/${outcome.requiredExposures}` +
         (outcome.adapted ? " · ADAPTADO" : ""),
     );
+
+    // El ataque nace donde terminó el trazo y sale hacia donde apuntaste. La
+    // puntería curva el viaje; el destino es siempre el ente (ADR 0010 §3).
+    const fin = points[points.length - 1]!;
+    const previo = points[Math.max(0, points.length - 6)]!;
+    const dx = fin.x - previo.x;
+    const dy = fin.y - previo.y;
+    const largo = Math.hypot(dx, dy);
+    const origen = aSvg(fin.x, fin.y);
+    // Sin desplazamiento (un `hold`) no hay puntería que leer: se apunta al ente.
+    const aim =
+      largo < 1
+        ? {
+            x: (CENTER.x - origen.x) / (Math.hypot(CENTER.x - origen.x, CENTER.y - origen.y) || 1),
+            y: (CENTER.y - origen.y) / (Math.hypot(CENTER.x - origen.x, CENTER.y - origen.y) || 1),
+          }
+        : { x: dx / largo, y: dy / largo };
+
+    tracers = [
+      ...pruneTracers(tracers, t),
+      {
+        kind: attempt.gesture,
+        origin: origen,
+        aim,
+        element: session.element,
+        eff: outcome.effApplied,
+        bornAt: t,
+      },
+    ];
+
     view.sync(room.log);
   },
 });
@@ -200,6 +270,23 @@ function frame(): void {
   }
 
   view.tick(t);
+
+  // La capa efímera se redibuja por cuadro: es la única parte del render que
+  // depende de un reloj, y puede hacerlo justamente porque no va al replay.
+  tracers = pruneTracers(tracers, t);
+  const ruidoAhora = session.readNoise(t);
+  overlay.innerHTML = renderEphemeral(
+    {
+      tracers,
+      cursor,
+      erraticity: ruidoAhora.erraticity,
+      agitated: ruidoAhora.agitated,
+      center: CENTER,
+      coreRadius: defaultTheme.coreRadius,
+    },
+    t,
+  );
+
   hud.update(hudModelOf(session, t, view.stats.fps));
 
   for (const { prefab, boton } of botones) {
