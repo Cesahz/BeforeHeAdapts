@@ -116,6 +116,28 @@ describe("lo que la amenaza basal NO alcanza a arreglar sola", () => {
 });
 
 describe("la interrupción crea decisiones, pero no alcanza sola", () => {
+  it("el que ignora el aviso pierde exactamente los trazos que le rompieron", () => {
+    // La contabilidad de la mecánica: cada golpe que ALCANZA a un jugador con un
+    // trazo en curso rompe ese trazo, y ninguno más. Si algún día un golpe
+    // esquivado interrumpiera, o si un golpe interrumpiera dos veces, esto se
+    // pone rojo — y las dos cosas serían la mecánica volviéndose injusta.
+    const r = probe({ order: "inteligente", policy: "temerario", interruption: true });
+
+    expect(r.interrupted).toBe(r.hitsTaken);
+    expect(r.interrupted).toBeGreaterThan(0);
+  });
+
+  it("el competente resigna trazos que sin la mecánica habría dibujado gratis", () => {
+    // La decisión que hoy no existía, medida contra su ausencia: mismo jugador,
+    // mismo orden, y la única diferencia es que ahora dibujar y esquivar compiten
+    // por la atención.
+    const con = probe({ ...inteligente, interruption: true });
+    const sin = probe({ ...inteligente, interruption: false });
+
+    expect(con.abandoned).toBeGreaterThan(sin.abandoned);
+    expect(sin.abandoned).toBe(0);
+  });
+
   it("obliga a abandonar trazos: la decisión que hoy no existe", () => {
     // La mecánica SÍ funciona en dirección. Un jugador que hoy dibuja lo que
     // quiere, cuando quiere, ahora tiene que resignar trazos.

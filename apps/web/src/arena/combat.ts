@@ -22,7 +22,7 @@ import type { EngineEvent, Primitive, StimulusSignature } from "@beforeheadapts/
 import { cooldownOf, type Composition, type Element } from "@beforeheadapts/arena-dsl";
 
 import { AMBIENT_SIGNATURE } from "./ambient.js";
-import { PLAYER, VICTORY } from "./balance.js";
+import { DRAW, PLAYER, VICTORY } from "./balance.js";
 import { Room, type AttackOutcome } from "./room.js";
 import { vocabularyOf, type Vocabulary } from "./vocabulary.js";
 import {
@@ -97,6 +97,8 @@ export class CombatSession {
   #lastGesture: GestureKind | undefined;
   #hp = PLAYER.maxHp;
   #enteHp = VICTORY.enteMaxHp;
+  /** Recuperación tras una interrupción (ADR 0012 §1). Ver `interrupt` y `canDraw`. */
+  #staggeredUntil = -Infinity;
   /** Vocabulario memoizado por largo del log: solo cambia cuando entra un evento. */
   #vocabCache: { readonly at: number; readonly value: Vocabulary } | undefined;
 
@@ -211,6 +213,43 @@ export class CombatSession {
   hurt(amount: number): void {
     if (this.finished) return;
     this.#hp = Math.max(0, this.#hp - amount);
+  }
+
+  /**
+   * Un golpe telegrafiado rompió el trazo en curso (ADR 0012 §1).
+   *
+   * Es la corrección estructural del defecto que la sonda destapó: hasta acá
+   * `hurt()` solo restaba HP y no tocaba el estado del gesto, así que **dibujar
+   * y esquivar eran actividades independientes que nunca competían**. Con la
+   * interrupción compiten por el único recurso que este juego eligió como
+   * moneda: la atención.
+   *
+   * El trazo roto **no llega al log**: no se emitió firma y no hubo exposición.
+   * Por eso tampoco **cobra cooldown** — el ADR 0009 ya fijó que no se le cobra
+   * al jugador lo que no atacó, y cobrarlo volvería los gestos caros injugables
+   * en el Acto III. Se los quiere escasos, no extintos.
+   *
+   * Lo que sí cuesta es triple y alcanza: el tiempo invertido en el trazo, la
+   * ventana de peligro en la que se estuvo expuesto, y este stagger.
+   */
+  interrupt(now: number): void {
+    this.#staggeredUntil = now + DRAW.staggerMs;
+  }
+
+  /**
+   * ¿Puede el jugador arrancar un trazo ahora?
+   *
+   * `false` solo durante el stagger de una interrupción. No es un cooldown de
+   * gesto: no distingue composiciones ni consume nada, es la recuperación del
+   * golpe que te rompió el trazo.
+   */
+  canDraw(now: number): boolean {
+    return now >= this.#staggeredUntil;
+  }
+
+  /** Hasta cuándo dura el stagger. Lo dibuja el HUD; `-Infinity` si nunca lo interrumpieron. */
+  get staggeredUntil(): number {
+    return this.#staggeredUntil;
   }
 
   /** Erraticidad vigente y si el ente está percibiendo agitación. Alimenta el feedback preventivo. */

@@ -12,7 +12,7 @@ import { requiredExposures } from "@beforeheadapts/core";
 
 import { AMBIENT_ELEMENT, AMBIENT_SIGNATURE } from "./ambient.js";
 import { CombatSession } from "./combat.js";
-import { NOISE } from "./balance.js";
+import { DRAW, NOISE, PLAYER } from "./balance.js";
 import { compositionFor, type GesturePoint } from "../gesture/recognize.js";
 
 /** Los cinco tipos de evento del ledger. Nada más puede aparecer en un log. */
@@ -256,5 +256,56 @@ describe("arsenal (ADR 0009 §4)", () => {
     session.attack(composicion, espera);
 
     expect(session.arsenal).toHaveLength(1);
+  });
+});
+
+describe("interrupción de gestos (ADR 0012 §1)", () => {
+  it("el stagger bloquea el próximo trazo, y solo por lo que dura", () => {
+    const session = new CombatSession();
+
+    expect(session.canDraw(0)).toBe(true);
+    session.interrupt(1_000);
+    expect(session.canDraw(1_000)).toBe(false);
+    expect(session.canDraw(1_000 + DRAW.staggerMs - 1)).toBe(false);
+    expect(session.canDraw(1_000 + DRAW.staggerMs)).toBe(true);
+  });
+
+  it("una interrupción NO cobra cooldown: no se le cobra al jugador lo que no atacó", () => {
+    // El principio es del ADR 0009 y el 0012 §1 lo hereda explícitamente. Un
+    // trazo roto no emitió firma y no hubo exposición, así que la composición
+    // tiene que quedar tan disponible como estaba. Cobrar además el cooldown
+    // volvería los gestos caros injugables en el Acto III: se los quiere
+    // escasos, no extintos.
+    const session = new CombatSession();
+    const composicion = compositionFor("zigzag", session.element);
+
+    session.interrupt(0);
+
+    expect(session.room.canAttack(composicion, DRAW.staggerMs)).toBe(true);
+  });
+
+  it("una interrupción no toca el log: el trazo roto nunca fue una exposición", () => {
+    const session = new CombatSession();
+    const antes = session.room.log.events.length;
+
+    session.interrupt(0);
+    session.interrupt(5_000);
+
+    expect(session.room.log.events.length).toBe(antes);
+  });
+
+  it("interrumpir no lastima, y lastimar no interrumpe", () => {
+    // Son dos efectos separados a propósito, y quien los combina es el llamador:
+    // un golpe esquivado no interrumpe nada, y el stagger no es daño. Fusionarlos
+    // acá haría imposible el golpe que pega sin trazo en curso, que es el caso
+    // normal.
+    const session = new CombatSession();
+
+    session.interrupt(0);
+    expect(session.hp).toBe(PLAYER.maxHp);
+
+    session.hurt(10);
+    expect(session.canDraw(0)).toBe(false);
+    expect(session.hp).toBe(PLAYER.maxHp - 10);
   });
 });

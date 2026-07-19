@@ -12,7 +12,7 @@ import "./style.css";
 import { downloadText } from "./arena/download.js";
 import { CombatSession, type Act, type RunOutcome } from "./arena/combat.js";
 import { CounterScheduler, type CounterPhase } from "./arena/counter.js";
-import { COUNTER } from "./arena/balance.js";
+import { COUNTER, DRAW } from "./arena/balance.js";
 import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
@@ -285,7 +285,10 @@ const RECHAZO: Record<string, string> = {
   ambiguo: "no se entendió el trazo",
 };
 
-attachPointer(escena, now, {
+const puntero = attachPointer(escena, now, {
+  // El stagger de la interrupción (ADR 0012 §1). Quien decide es el dominio; el
+  // muestreador solo pregunta.
+  canStart: (t) => session.canDraw(t),
   // Frecuencia alta, costo mínimo: esto NO toca el motor. Solo alimenta la
   // ventana de 32 posiciones del lector de ruido.
   onMove: (x, y, t) => {
@@ -409,6 +412,14 @@ function frame(): void {
     if (golpe.hit) {
       session.hurt(golpe.damage);
       log(`✸ ${nombre} — ${golpe.damage.toFixed(0)} HP · quedan ${session.hp}`);
+      // La interrupción (ADR 0012 §1): el golpe que te alcanza con un trazo en
+      // curso lo rompe. El trazo no se convierte en exposición y no llega al
+      // log, y no cobra cooldown — no se le cobra al jugador lo que no atacó.
+      if (puntero.drawing()) {
+        puntero.abort();
+        session.interrupt(t);
+        log(`↯ trazo interrumpido — ${(DRAW.staggerMs / 1000).toFixed(1)} s para recuperarte`);
+      }
       if (session.defeated) log("EL ENTE SE ADAPTÓ A VOS. fin de la corrida.");
     } else {
       log(`✧ ${nombre} esquivado`);

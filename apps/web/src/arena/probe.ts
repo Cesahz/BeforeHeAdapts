@@ -44,6 +44,30 @@ const MAX_MS = 30 * 60 * 1000;
 const ANCHOR: Point = { x: 0, y: 0 };
 const SAFE: Point = { x: 10_000, y: 10_000 };
 
+/**
+ * Cuánto tarda el jugador en NOTAR un aviso que se encendió mientras dibujaba.
+ *
+ * Es una suposición de modelado, no un dial de balance, y por eso vive acá y no
+ * en `balance.ts`: el juego no impone esta demora, la impone la cabeza del
+ * jugador. El ADR 0009 §4 lo dice desde el principio — el contraataque **compite
+ * por foco, no por destreza**. Un jugador simulado que lee el telegraph con
+ * precisión perfecta mientras traza un zigzag no es "competente": es omnisciente,
+ * y modela un juego que nadie juega.
+ *
+ * Sin esta demora la sonda daba un resultado imposible: la interrupción existía,
+ * el ente disparaba, y el jugador terminaba 100/100 sin ser interrumpido una sola
+ * vez, porque esquivaba TODO aun con un trazo caro a mitad de camino. Es el mismo
+ * defecto que la sonda vino a cazar, una capa más adentro: un modelo que se
+ * parece al jugador real sin serlo.
+ *
+ * 400 ms es del orden de un cambio de foco atencional, no de un reflejo (~250 ms
+ * es un tiempo de reacción simple, con la atención YA puesta ahí). La conclusión
+ * no debería depender del valor exacto: barrerlo es parte de calibrar el dial.
+ *
+ * ⚠️ Como todo `DRAW`, esto se re-mide cuando la arena instrumente trazos reales.
+ */
+const NOTICE_WHILE_DRAWING_MS = 400;
+
 /** Cuánto tarda cada trazo. La estimación vive en `balance.ts`, no acá. */
 export function drawMsFor(gesture: GestureKind): number {
   switch (gesture) {
@@ -156,8 +180,7 @@ type PlayerState =
       readonly kind: "drawing";
       readonly entry: VocabularyEntry;
       readonly endsAt: number;
-    }
-  | { readonly kind: "stagger"; readonly until: number };
+    };
 
 /**
  * Corre una sesión completa y devuelve qué pasó.
@@ -200,7 +223,10 @@ export function probe(options: ProbeOptions): ProbeResult {
     // exactamente el defecto que el ADR corrige.
     let committed = false;
     if (options.interruption && player.kind === "drawing" && telegraph !== undefined) {
-      if (options.policy === "temerario") {
+      // Todavía no lo vio: la atención está en el trazo. No puede reaccionar a
+      // algo que no percibió, y por eso sigue anclado aunque le convenga irse.
+      const loVio = now >= telegraph.startedAt + NOTICE_WHILE_DRAWING_MS;
+      if (options.policy === "temerario" || !loVio) {
         committed = true;
       } else {
         // El cálculo del jugador competente: ¿llego a cerrar el trazo antes del
@@ -229,7 +255,12 @@ export function probe(options: ProbeOptions): ProbeResult {
         // —no se emitió firma— pero cuesta el trazo entero y el stagger.
         if (options.interruption && player.kind === "drawing") {
           interrupted += 1;
-          player = { kind: "stagger", until: now + DRAW.staggerMs };
+          // El stagger sale de `CombatSession`, no de una cuenta propia de la
+          // sonda: desde que la mecánica existe, medirla contra un modelo
+          // paralelo sería exactamente el fixture sintético que este proyecto ya
+          // aprendió a no creerle.
+          session.interrupt(now);
+          player = { kind: "idle" };
         }
       } else {
         dodges += 1;
@@ -239,8 +270,6 @@ export function probe(options: ProbeOptions): ProbeResult {
     if (session.finished) break;
 
     // El jugador decide.
-    if (player.kind === "stagger" && now >= player.until) player = { kind: "idle" };
-
     if (player.kind === "drawing" && now >= player.endsAt) {
       const outcome = session.attack(player.entry.composition, now);
       attacks += 1;
@@ -250,7 +279,11 @@ export function probe(options: ProbeOptions): ProbeResult {
       player = { kind: "idle" };
     } else if (player.kind === "idle") {
       const entry = pick(session, now, options.order);
-      if (entry !== undefined && puedeEmpezar(options, scheduler, entry, now)) {
+      if (
+        entry !== undefined &&
+        session.canDraw(now) &&
+        puedeEmpezar(options, scheduler, entry, now)
+      ) {
         player = { kind: "drawing", entry, endsAt: now + drawMsFor(entry.gesture) };
       }
     }

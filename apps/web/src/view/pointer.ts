@@ -23,6 +23,31 @@ export interface PointerHandlers {
   readonly onMove: (x: number, y: number, now: number) => void;
   /** Trazo terminado (se soltó el botón). Los puntos ya vienen relativos al contenedor. */
   readonly onStroke: (points: readonly GesturePoint[], now: number) => void;
+  /**
+   * ¿Se puede empezar un trazo ahora? Opcional; por defecto siempre sí.
+   *
+   * Existe para el stagger de la interrupción (ADR 0012 §1), y la pregunta se
+   * hace ACÁ, en el borde: la decisión sigue siendo del dominio —quien contesta
+   * es `CombatSession.canDraw`— y este módulo solo obedece. Un trazo que ni
+   * siquiera arranca no acumula puntos, así que no hay nada que descartar
+   * después ni riesgo de que un `pointerup` tardío lo reviva.
+   */
+  readonly canStart?: (now: number) => boolean;
+}
+
+/** El muestreador enganchado. Lo que el resto del juego puede pedirle. */
+export interface PointerControl {
+  /** Desengancha todo. Era el valor de retorno de `attachPointer` antes del ADR 0012. */
+  readonly detach: () => void;
+  /** ¿Hay un trazo en curso ahora mismo? Es lo que la interrupción puede romper. */
+  readonly drawing: () => boolean;
+  /**
+   * Rompe el trazo en curso y lo tira: **no** llama a `onStroke`.
+   *
+   * Es la mitad física de la interrupción. El trazo no se convierte en
+   * exposición y no llega al log — no llegó a ser un ataque.
+   */
+  readonly abort: () => void;
 }
 
 /** Tope duro de muestras por trazo. Un trazo larguísimo no puede crecer sin límite. */
@@ -41,16 +66,24 @@ const HEARTBEAT_MS = 16;
  * una sola línea de tiempo para toda la sala (la del ledger, que rechaza
  * timestamps que retroceden) y hace testeable el muestreador si algún día hace
  * falta.
- * @returns función para desenganchar todo.
+ * @returns el control del muestreador: desenganche, y la interrupción del ADR 0012.
  */
 export function attachPointer(
   element: HTMLElement,
   clock: () => number,
   handlers: PointerHandlers,
-): () => void {
+): PointerControl {
   let stroke: GesturePoint[] | undefined;
   let last: { x: number; y: number } | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  /**
+   * El puntero que estamos capturando, si hay trazo en curso.
+   *
+   * Hace falta para soltar la captura al ABORTAR, que es un camino donde no hay
+   * evento del DOM del que sacar el `pointerId`. Sin esto, un trazo interrumpido
+   * dejaría el puntero capturado y el siguiente `pointerdown` llegaría raro.
+   */
+  let capturado: number | undefined;
 
   /**
    * Late una muestra por paso aunque el puntero esté quieto.
@@ -85,8 +118,18 @@ export function attachPointer(
     return { x: event.clientX - box.left, y: event.clientY - box.top };
   };
 
+  /** Suelta la captura del puntero, venga de un evento o de un abort. */
+  const soltarCaptura = (pointerId: number | undefined): void => {
+    if (pointerId === undefined) return;
+    if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
+    capturado = undefined;
+  };
+
   const onPointerDown = (event: PointerEvent): void => {
     const now = clock();
+    // El stagger de la interrupción: durante la recuperación el trazo ni
+    // siquiera empieza. Apretar no acumula un punto que después haya que tirar.
+    if (handlers.canStart !== undefined && !handlers.canStart(now)) return;
     const { x, y } = positionOf(event);
     stroke = [{ x, y, t: now }];
     last = { x, y };
@@ -95,6 +138,7 @@ export function attachPointer(
     // cierre el trazo acá. Sin esto, un gesto que se sale del área queda
     // colgado y el siguiente arranca con puntos viejos pegados adelante.
     element.setPointerCapture(event.pointerId);
+    capturado = event.pointerId;
   };
 
   const onPointerMove = (event: PointerEvent): void => {
@@ -115,8 +159,20 @@ export function attachPointer(
     stroke.push({ x, y, t: now });
     const points = stroke;
     stroke = undefined;
-    if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
+    soltarCaptura(event.pointerId);
     handlers.onStroke(points, now);
+  };
+
+  /**
+   * El trazo se rompe y se tira. Ninguna diferencia con soltar el botón salvo la
+   * que importa: `onStroke` **no se llama**, así que no hay reconocimiento, no
+   * hay firma y no hay exposición. El trazo nunca existió para el motor.
+   */
+  const abort = (): void => {
+    if (stroke === undefined) return;
+    stopHeartbeat();
+    stroke = undefined;
+    soltarCaptura(capturado);
   };
 
   element.addEventListener("pointerdown", onPointerDown);
@@ -127,11 +183,15 @@ export function attachPointer(
   // reconocedor lo va a rechazar por incompleto, que es lo correcto.
   element.addEventListener("pointercancel", finish);
 
-  return () => {
-    stopHeartbeat();
-    element.removeEventListener("pointerdown", onPointerDown);
-    element.removeEventListener("pointermove", onPointerMove);
-    element.removeEventListener("pointerup", finish);
-    element.removeEventListener("pointercancel", finish);
+  return {
+    drawing: () => stroke !== undefined,
+    abort,
+    detach: () => {
+      stopHeartbeat();
+      element.removeEventListener("pointerdown", onPointerDown);
+      element.removeEventListener("pointermove", onPointerMove);
+      element.removeEventListener("pointerup", finish);
+      element.removeEventListener("pointercancel", finish);
+    },
   };
 }
