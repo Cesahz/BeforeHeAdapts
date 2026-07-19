@@ -39,12 +39,42 @@ export interface ThreadLayout {
   readonly b: Point;
 }
 
+/**
+ * Una cicatriz: la marca permanente que deja un cluster asimilado sobre el
+ * cuerpo del ente (§5 del diseño del adaptador).
+ *
+ * El §5 pide que las modificaciones **se acumulen**, de modo que el cuerpo del
+ * ente sea un registro visible de todo lo que aprendió — un ente muy adaptado
+ * se *ve* distinto y su historia es legible en su forma.
+ *
+ * La cicatriz se ancla en el rumbo desde el que esa firma atacaba, así que la
+ * marca aparece **donde el ente venía recibiendo los golpes**. Eso convierte la
+ * deformación en algo que se puede leer: la zona endurecida es exactamente la
+ * que ese ataque ya no va a poder volver a perforar.
+ */
+export interface ScarLayout {
+  readonly clusterId: ClusterId;
+  /** Rumbo del ataque que la produjo. El mismo de `bearingOf`. */
+  readonly bearing: number;
+  /**
+   * Magnitud en `(0, 1]`, según la **complejidad** del cluster asimilado.
+   *
+   * El §5 lo pide explícitamente: complejidad baja → cambio superficial,
+   * complejidad alta → cambio estructural. La complejidad se lee de `N(c)`, que
+   * es la medida que el contrato ya tiene para eso (R2), en vez de inventar una
+   * escala nueva que pudiera contradecirla.
+   */
+  readonly magnitude: number;
+}
+
 /** Todo lo que hay que ubicar en un frame, ya resuelto en coordenadas. */
 export interface Layout {
   readonly nodes: readonly NodeLayout[];
   readonly threads: readonly ThreadLayout[];
   /** Vértices del ente: `baseVertices + clusters asimilados`. */
   readonly coreVertices: number;
+  /** Cicatrices acumuladas, una por cluster asimilado, en orden de aparición. */
+  readonly scars: readonly ScarLayout[];
 }
 
 /**
@@ -64,7 +94,38 @@ export function layoutOf(frame: Frame, theme: Theme): Layout {
     nodes: Object.freeze(nodes) as readonly NodeLayout[],
     threads: threadsOf(frame.clusters, nodes, theme),
     coreVertices: theme.baseVertices + frame.clusters.filter((c) => c.adapted).length,
+    scars: scarsOf(frame.clusters, theme),
   });
+}
+
+/**
+ * Las cicatrices de los clusters ya asimilados.
+ *
+ * Deriva **solo del frame**, como todo el resto del render: no hay estado visual
+ * acumulado en ningún lado. Que la marca "persista" no es memoria del
+ * renderizador — es que el cluster sigue adaptado en cada frame posterior, así
+ * que su cicatriz se vuelve a derivar idéntica. Mismo log, misma forma final
+ * (§5, "determinismo").
+ */
+function scarsOf(clusters: readonly ClusterFrame[], theme: Theme): readonly ScarLayout[] {
+  const scars = clusters
+    .filter((cluster) => cluster.adapted)
+    .map((cluster) => {
+      // `N(c)` es la medida de complejidad que el contrato ya define (R2).
+      const required = requiredExposures(cluster.signature);
+      const span = Math.max(1, theme.scarComplexityRef - 1);
+      const crudo = Math.min(1, (required - 1) / span);
+      // Piso de 0,25: una firma simple deja marca chica, nunca marca invisible.
+      // Un cluster asimilado que no se viera sería el render callando el único
+      // cambio que R1 considera irreversible.
+      return Object.freeze({
+        clusterId: cluster.clusterId,
+        bearing: bearingOf(cluster.clusterId),
+        magnitude: 0.25 + 0.75 * crudo,
+      });
+    });
+
+  return Object.freeze(scars);
 }
 
 /**

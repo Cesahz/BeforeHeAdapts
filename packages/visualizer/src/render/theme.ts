@@ -74,6 +74,28 @@ export interface Theme {
   readonly crystalGrowth: number;
   /** Caras del anillo facetado. */
   readonly crystalFacets: number;
+
+  /**
+   * Deformación del ente (§5 del diseño del adaptador).
+   *
+   * Cada cluster asimilado deja una **cicatriz** permanente sobre el perímetro,
+   * anclada en el rumbo desde el que ese ataque llegaba. Se acumulan: un ente
+   * muy adaptado se ve distinto, y su historia es legible en su forma.
+   */
+  /** `N(c)` a partir del cual una cicatriz alcanza magnitud plena. */
+  readonly scarComplexityRef: number;
+  /** Semi-ancho angular de una cicatriz de magnitud plena, en radianes. */
+  readonly scarSpanRad: number;
+  /** Grosor del arco endurecido con magnitud plena. */
+  readonly scarWidth: number;
+  /**
+   * Magnitud a partir de la cual la cicatriz deja de ser superficial y se vuelve
+   * **estructural**: le crecen crestas radiales. Es la distinción que el §5 pide
+   * entre "endurecimiento de una zona" y "cambio de geometría".
+   */
+  readonly scarRidgeThreshold: number;
+  /** Largo de una cresta con magnitud plena, en unidades de usuario. */
+  readonly scarRidgeLength: number;
 }
 
 export const defaultTheme: Theme = Object.freeze({
@@ -108,6 +130,14 @@ export const defaultTheme: Theme = Object.freeze({
   crystalGrowth: 1.6,
   // Seis caras: leen como cristal sin competir con el polígono del ente.
   crystalFacets: 6,
+  // `N(c) = 6` es una firma de cuatro o cinco primitivas: complejidad alta sin
+  // ser el extremo del catálogo. Ahí la cicatriz ya llega a magnitud plena.
+  scarComplexityRef: 6,
+  // ~34°: ocho cicatrices plenas cubren el perímetro sin fundirse en un anillo.
+  scarSpanRad: 0.3,
+  scarWidth: 7,
+  scarRidgeThreshold: 0.6,
+  scarRidgeLength: 16,
 });
 
 /** El centro del lienzo: donde vive el ente. */

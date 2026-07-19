@@ -109,6 +109,7 @@ function renderAt(frames: readonly Frame[], index: number, options: RenderOption
       ...incomingLayer(frame, center, radius, theme, options.ephemeralOwnedSeqs),
       shockwaveLayer(sinceSnap, center, radius, theme),
       coreLayer(frame, layout, center, radius, scale, theme),
+      ...scarLayer(layout, center, radius, theme),
       ...nodeLayer(layout, theme),
     ].filter((piece): piece is string => piece !== undefined),
     { class: "replay-frame", "data-seq": frame.seq },
@@ -282,6 +283,78 @@ function incomingLayer(
     }),
     ...impacto,
   ];
+}
+
+/**
+ * La deformación del ente (§5 del diseño del adaptador).
+ *
+ * Cada cluster asimilado endurece la zona del perímetro por donde ese ataque
+ * venía entrando. Las marcas **se acumulan y no se van nunca**: el cuerpo del
+ * ente termina siendo el registro visible de todo lo que aprendió, que es
+ * exactamente lo que el §5 pide.
+ *
+ * Es deliberadamente lo contrario de un medidor. No dice "8 clusters
+ * adaptados": dice *este de acá ya no te sirve, y este, y este*. La misma
+ * información, en el único lugar donde el jugador ya está mirando.
+ *
+ * **No toca los vértices del polígono.** El conteo de vértices es la señal de
+ * R1 y tiene su propio test; meterle mano acá haría que dos cosas distintas
+ * —cuánto adaptó y qué adaptó— compitieran por el mismo canal visual.
+ */
+function scarLayer(
+  layout: Layout,
+  center: Point,
+  radius: number,
+  theme: Theme,
+): readonly string[] {
+  return layout.scars.flatMap((scar) => {
+    const span = theme.scarSpanRad * scar.magnitude;
+    const desde = polar(center, radius, scar.bearing - span);
+    const hasta = polar(center, radius, scar.bearing + span);
+
+    // El arco endurecido. `sweep-flag = 1` porque va en el sentido creciente del
+    // ángulo, igual que `polar`; con 0 el arco saldría por el lado largo y la
+    // cicatriz envolvería el ente entero.
+    const arco = el("path", {
+      class: "scar",
+      "data-cluster": scar.clusterId,
+      d: `M ${arredondear(desde.x)} ${arredondear(desde.y)} A ${arredondear(radius)} ${arredondear(radius)} 0 0 1 ${arredondear(hasta.x)} ${arredondear(hasta.y)}`,
+      fill: "none",
+      stroke: theme.palette.assimilated,
+      "stroke-width": theme.scarWidth * scar.magnitude,
+      "stroke-opacity": 0.35 + 0.45 * scar.magnitude,
+      "stroke-linecap": "round",
+    });
+
+    if (scar.magnitude < theme.scarRidgeThreshold) return [arco];
+
+    // Cambio ESTRUCTURAL: a complejidad alta la zona no solo se endurece, le
+    // crecen crestas hacia afuera. Es la diferencia que el §5 marca entre
+    // "endurecimiento superficial" y "reordenar la geometría".
+    const largo = theme.scarRidgeLength * scar.magnitude;
+    const crestas = [-span, 0, span].map((offset) => {
+      const base = polar(center, radius, scar.bearing + offset);
+      const punta = polar(center, radius + largo, scar.bearing + offset);
+      return el("line", {
+        class: "scar-ridge",
+        x1: base.x,
+        y1: base.y,
+        x2: punta.x,
+        y2: punta.y,
+        stroke: theme.palette.assimilated,
+        "stroke-width": 2,
+        "stroke-opacity": 0.6 * scar.magnitude,
+        "stroke-linecap": "round",
+      });
+    });
+
+    return [arco, ...crestas];
+  });
+}
+
+/** Redondeo del markup. Mismo criterio que `el`: SVG determinista byte a byte. */
+function arredondear(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 /** La onda del snap de R1. `undefined` fuera de la ventana: no se dibuja nada. */

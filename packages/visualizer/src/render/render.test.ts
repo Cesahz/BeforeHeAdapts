@@ -19,6 +19,7 @@ import {
 } from "@beforeheadapts/core";
 import { framesFrom, type Frame } from "../frames/index.js";
 import { renderFrame, renderFrames } from "./index.js";
+import { bearingOf } from "./layout.js";
 import { defaultTheme } from "./theme.js";
 
 const fuego = canonicalize(["fuego"], 1);
@@ -292,6 +293,84 @@ describe("R1 — el salto se ve como un snap", () => {
 
     expect(verticesDe(svgs[0]!)).toBe(defaultTheme.baseVertices);
     expect(verticesDe(svgs.at(-1)!)).toBe(defaultTheme.baseVertices + 1);
+  });
+
+  // §5 del diseño: el cuerpo del ente es un registro visible de lo que aprendió.
+  // La prueba de que la deformación funciona no es que se vea linda, es que sea
+  // MONÓTONA e IRREVERSIBLE — igual que la adaptación que representa.
+  it("deja una cicatriz permanente por cada cluster asimilado", () => {
+    const frames = framesOf(...repeat(compuesta, n));
+    const svgs = renderFrames(frames);
+
+    expect(countOf(svgs[0]!, "scar")).toBe(0);
+    expect(countOf(svgs.at(-1)!, "scar")).toBe(1);
+  });
+
+  it("las cicatrices se acumulan y no se van nunca", () => {
+    // Dos firmas distintas, las dos hasta adaptarse. El ente termina con las
+    // dos marcas: la deformación acumula, no reemplaza.
+    const otra = canonicalize(["viento", "arena"], 1);
+    const frames = framesOf(
+      ...repeat(compuesta, n),
+      ...repeat(otra, requiredExposures(otra)),
+    );
+    const svgs = renderFrames(frames);
+    const cicatrices = svgs.map((out) => countOf(out, "scar"));
+
+    // Monótona: nunca baja. Una cicatriz que desapareciera sería el render
+    // diciendo que el ente olvidó, y el ente no olvida.
+    for (let i = 1; i < cicatrices.length; i += 1) {
+      expect(cicatrices[i]!).toBeGreaterThanOrEqual(cicatrices[i - 1]!);
+    }
+    expect(cicatrices.at(-1)!).toBe(2);
+  });
+
+  it("ancla la cicatriz en el rumbo desde el que atacaba esa firma", () => {
+    // Es lo que la vuelve legible: la zona endurecida es exactamente por donde
+    // ese ataque venía entrando, no un lugar arbitrario. Si esta propiedad se
+    // rompiera, la deformación pasaría a ser decoración — se seguiría viendo
+    // "algo que cambia" y dejaría de significar nada.
+    const frames = framesOf(...repeat(compuesta, n));
+    const ultimo = renderFrames(frames).at(-1)!;
+    const cicatriz = elementsOf(ultimo, "scar")[0]!;
+
+    // Los dos extremos del arco, del atributo `d`.
+    const d = /d="M ([-\d.]+) ([-\d.]+) A [^ ]+ [^ ]+ 0 0 1 ([-\d.]+) ([-\d.]+)"/.exec(cicatriz);
+    expect(d).not.toBeNull();
+    const [x1, y1, x2, y2] = d!.slice(1).map(Number) as [number, number, number, number];
+
+    // El punto medio del arco tiene que caer sobre el rumbo del cluster.
+    // Ojo con la convención: `polar` usa 0 HACIA ARRIBA y sentido horario, no
+    // la de `atan2`. Invertirla es `atan2(dx, -dy)`, no `atan2(dy, dx)` — la
+    // primera versión de este test se comió el π/2 de diferencia y falló
+    // acusando al código, que estaba bien.
+    const centro = defaultTheme.size / 2;
+    const anguloMedio = Math.atan2((x1 + x2) / 2 - centro, -((y1 + y2) / 2 - centro));
+
+    const clusterId = /data-cluster="([^"]*)"/.exec(cicatriz)![1]!;
+    const esperado = bearingOf(clusterId);
+
+    // Diferencia angular normalizada a (-π, π]: 0 y 2π son el mismo rumbo.
+    const delta = Math.atan2(
+      Math.sin(anguloMedio - esperado),
+      Math.cos(anguloMedio - esperado),
+    );
+    expect(Math.abs(delta)).toBeLessThan(0.01);
+  });
+
+  it("una firma más compleja deja una marca más grande", () => {
+    // El §5 pide que la magnitud siga la complejidad: baja → superficial,
+    // alta → estructural. La complejidad se lee de N(c), que es la medida que
+    // el contrato ya define en R2.
+    const simple = canonicalize(["fuego"], 1);
+    const anchoDe = (signature: typeof simple): number => {
+      const frames = framesOf(...repeat(signature, requiredExposures(signature)));
+      const out = renderFrames(frames).at(-1)!;
+      return Number(attrOf(out, "scar", "stroke-width"));
+    };
+
+    expect(requiredExposures(compuesta)).toBeGreaterThan(requiredExposures(simple));
+    expect(anchoDe(compuesta)).toBeGreaterThan(anchoDe(simple));
   });
 
   it("marca el nodo asimilado con la clase de advertencia", () => {
