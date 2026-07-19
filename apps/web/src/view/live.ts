@@ -23,6 +23,7 @@ import {
   renderFrame,
   type DenseFrame,
   type Frame,
+  type RenderOptions,
 } from "@beforeheadapts/visualizer";
 import type { EventLog, PolicyInput } from "@beforeheadapts/core";
 
@@ -78,6 +79,12 @@ export class LiveView {
   constructor(
     private readonly container: { innerHTML: string },
     private readonly config: PolicyInput = {},
+    /**
+     * Opciones de render. La arena pasa su propio tema (ver `view/theme.ts`):
+     * el lienzo del combate es más ancho que el del gif exportado, y esa
+     * diferencia vive declarada acá y no escondida en el renderizador.
+     */
+    private readonly render: RenderOptions = {},
   ) {}
 
   get stats(): LiveStats {
@@ -175,7 +182,7 @@ export class LiveView {
     const end = this.#playhead + 1;
     const start = Math.max(0, end - WINDOW * DEFAULT_STEPS);
     const ventana = this.#dense.slice(start, end);
-    const svg = renderFrame(ventana, ventana.length - 1);
+    const svg = renderFrame(ventana, ventana.length - 1, this.render);
 
     // Escribir el DOM solo cuando el dibujo cambió: entre dos cuadros idénticos
     // no hay nada que actualizar, y el SVG es determinista byte a byte, así que

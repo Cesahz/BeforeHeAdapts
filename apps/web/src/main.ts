@@ -15,9 +15,10 @@ import { PREFABS, type Prefab } from "./arena/prefabs.js";
 import { replayFileName, serializeReplay } from "./arena/replay.js";
 import { CooldownError, Room } from "./arena/room.js";
 import { Builder } from "./builder/ui.js";
-import { centerOf, defaultTheme } from "@beforeheadapts/visualizer";
+import { centerOf } from "@beforeheadapts/visualizer";
 import { Hud, hudModelOf } from "./view/hud.js";
 import { LiveView } from "./view/live.js";
+import { arenaTheme } from "./view/theme.js";
 import { attachPointer } from "./view/pointer.js";
 import { pruneTracers, renderEphemeral, type Tracer } from "./view/ephemeral.js";
 
@@ -73,7 +74,7 @@ exportarBoton.textContent = "Exportar replay";
 const bitacoraLista = document.createElement("ul");
 bitacoraLista.className = "bitacora";
 
-panel.append(botonera, estado, medidor, exportarBoton, bitacoraLista);
+panel.append(botonera, estado, medidor, exportarBoton);
 
 // El HUD es DOM y vive FUERA de la escena: el §7 del diseño prohíbe animar el
 // juego con DOM. El ente y sus efectos son SVG; la vida y los cooldowns, no.
@@ -82,9 +83,35 @@ const hud = new Hud((element) => {
   log(`elemento armado: ${element}`);
 });
 
-root.append(escena, hud.element, panel);
+// --- Cajón deslizable --------------------------------------------------------
+// El Builder y los prefabs son la capa DELIBERADA (ADR 0009 §1): se usan entre
+// combate y combate, no durante. Antes vivían en una columna fija que le comía
+// el 28 % del ancho a la escena en todo momento, incluso mientras el jugador
+// dibujaba gestos y no los miraba. Ahora se corren fuera de pantalla y vuelven
+// con un botón: el combate se queda con la pantalla, que es de quien tiene que
+// ser.
+const cajon = document.createElement("aside");
+cajon.className = "cajon";
 
-const view = new LiveView(lienzo);
+const cajonBoton = document.createElement("button");
+cajonBoton.className = "cajon-tirador";
+cajonBoton.textContent = "⟨ arsenal";
+cajonBoton.addEventListener("click", () => {
+  const abierto = cajon.classList.toggle("cajon-abierto");
+  cajonBoton.textContent = abierto ? "arsenal ⟩" : "⟨ arsenal";
+});
+
+const cajonCuerpo = document.createElement("div");
+cajonCuerpo.className = "cajon-cuerpo";
+cajonCuerpo.append(panel);
+
+cajon.append(cajonBoton, cajonCuerpo);
+
+root.append(escena, hud.element, bitacoraLista, cajon);
+
+// La arena renderiza con SU tema, no con el del export: más lienzo alrededor
+// del mismo ente, que es lo que abre espacio para que un ataque viaje.
+const view = new LiveView(lienzo, {}, { theme: arenaTheme });
 
 // --- Capa efímera (ADR 0010 §2) ----------------------------------------------
 // Va en un SVG APARTE, encima del canónico y con el mismo viewBox, para que las
@@ -96,10 +123,10 @@ const view = new LiveView(lienzo);
 // aprendió — dos artefactos distintos con dos nombres distintos.
 const overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 overlay.setAttribute("class", "efimero");
-overlay.setAttribute("viewBox", `0 0 ${defaultTheme.size} ${defaultTheme.size}`);
+overlay.setAttribute("viewBox", `0 0 ${arenaTheme.size} ${arenaTheme.size}`);
 escena.append(overlay);
 
-const CENTER = centerOf(defaultTheme);
+const CENTER = centerOf(arenaTheme);
 let tracers: readonly Tracer[] = [];
 let cursor: { x: number; y: number } | undefined;
 
@@ -108,11 +135,12 @@ let cursor: { x: number; y: number } | undefined;
  *
  * El SVG escala a `width: 100%`, así que el factor es el ancho del contenedor
  * contra `theme.size`. Sin esta conversión el ataque nacería en un lugar
- * distinto del que apuntó el jugador en cuanto la ventana no midiera 600 px.
+ * distinto del que apuntó el jugador salvo que la ventana midiera exactamente
+ * `arenaTheme.size` píxeles — es decir, prácticamente nunca.
  */
 function aSvg(x: number, y: number): { x: number; y: number } {
   const caja = escena.getBoundingClientRect();
-  const escala = caja.width === 0 ? 1 : defaultTheme.size / caja.width;
+  const escala = caja.width === 0 ? 1 : arenaTheme.size / caja.width;
   return { x: x * escala, y: y * escala };
 }
 
@@ -249,7 +277,7 @@ const builder = new Builder(window.localStorage, {
   onLaunch: (build) => lanzar(build),
   onNotice: (mensaje) => log(mensaje),
 });
-root.append(builder.element);
+cajonCuerpo.append(builder.element);
 
 exportarBoton.addEventListener("click", () => {
   downloadText(replayFileName(room), serializeReplay(room));
@@ -282,7 +310,7 @@ function frame(): void {
       erraticity: ruidoAhora.erraticity,
       agitated: ruidoAhora.agitated,
       center: CENTER,
-      coreRadius: defaultTheme.coreRadius,
+      coreRadius: arenaTheme.coreRadius,
     },
     t,
   );
