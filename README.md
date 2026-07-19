@@ -82,8 +82,9 @@ Esa pureza no es dogma: es lo que hace que reproducir un log dé siempre el mism
 |---|---|---|
 | 1 | Núcleo — contrato R1–R6 en verde | completa (`v0.1.0`) |
 | 2 | Visualizador — replay del log a SVG | completa (`v0.2.0`) |
-| 3a | Arena local single-player | en curso |
-| 3b | Combate por cursor y deformación del ente | pendiente |
+| 3a | Arena local single-player — builder, prefabs, persistencia local | completa (`v0.3.0`) |
+| 3b | Combate en vivo — gestos por cursor, contraataques, deformación, condición de victoria por actos ([ADR 0011](docs/adr/0011-condicion-de-victoria-actos-y-firmas-viables.md)) | en cierre |
+| Balance | Calibración con suite de simulación masiva y compuerta de regresión | pendiente (fase propia) |
 | 4 | Salas online | en pausa |
 | 5 | Adaptador de auto-defensa del sitio | pendiente ([ADR 0005](docs/adr/0005-adaptador-de-autodefensa-del-sitio.md)) |
 

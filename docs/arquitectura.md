@@ -187,15 +187,19 @@ Justificación: un solo lenguaje del núcleo al navegador; el motor corre **idé
 
 ## 8. Ruta de desarrollo
 
-| Fase | Qué | Duración orientativa | Hito |
+| Fase | Qué | Estado | Hito |
 |---|---|---|---|
-| **0 — Contrato** | Las 6 reglas del §3 escritas como tests de aceptación ejecutables, antes de implementar. Ese archivo ES la spec. | ~1 semana | Spec ejecutable en verde parcial |
-| **1 — Núcleo** | `signature` + `ledger` + `policy` + `engine`. Puro, property tests. CLI de simulación: script de ataques (JSON) → log de eventos. | 2–3 semanas | Contrato 100% en verde |
-| **2 — Visualizador** | Log → animación: curvas de resistencia por firma, saltos de adaptación, red de similitud entre clusters. | 1–2 semanas | **Primer material publicable: gifs de simulaciones, sin web todavía** |
-| **3 — Arena local** | DSL + builder + ente en el navegador, single-player, todo client-side (el motor corre en el navegador). | 2–3 semanas | **Segundo hito publicable: demo jugable** |
-| **4 — Salas online** | Server autoritativo, WebSocket, salas, persistencia, deploy. | 3–4 semanas | El sueño comunitario en producción |
-| **5 — Auto-defensa del sitio** | El mismo motor supervisa la seguridad operativa de la arena (rate limiting, mitigación de bots) como segundo dominio real, en instancia y log separados. Modo sombra primero. + writeup "mismo motor, dos dominios". | ~2 semanas (opcional) | Argumento de arquitectura completo, demostrado en producción |
-| **6 — Núcleo en Rust** | Reescribir `packages/core` en Rust→WASM contra la misma suite del contrato. Cero cambios fuera del núcleo. | opcional, sin apuro | Writeup: "mismo contrato, dos implementaciones" + aprendizaje de Rust sobre sistema real |
+| **0 — Contrato** | Las 6 reglas del §3 escritas como tests de aceptación ejecutables, antes de implementar. Ese archivo ES la spec. | **Completa** | Spec ejecutable (en rojo, como corresponde a la fase) |
+| **1 — Núcleo** | `signature` + `ledger` + `policy` + `engine`. Puro, property tests. | **Completa (`v0.1.0`)** | Contrato R1–R6 100% en verde |
+| **2 — Visualizador** | Log → frames → SVG determinista, export, demo. [ADR 0007](adr/0007-render-svg-sobre-secuencia-de-frames.md). | **Completa (`v0.2.0`)** | **Primer material publicable: replays sintéticos en SVG** |
+| **3a — Arena local** | DSL ([ADR 0008](adr/0008-catalogo-primitivas-dsl-arena.md)) + builder + prefabs + persistencia local, single-player client-side. | **Completa (`v0.3.0`)** | **Demo jugable local** |
+| **3b — Combate en vivo** | Gestos por cursor ([ADR 0009](adr/0009-combate-en-vivo-gestos-ruido-y-contraataque.md)), capa efímera ([ADR 0010](adr/0010-fluidez-y-capa-efimera-del-render.md)), contraataques, deformación, condición de victoria por actos ([ADR 0011](adr/0011-condicion-de-victoria-actos-y-firmas-viables.md)). Guía: [diseno-adaptador-web.md](diseno-adaptador-web.md). | **En cierre** | La carrera se juega y se puede ganar/perder |
+| **Balance** | Calibración de `policy` y diales de dominio con suite de simulación masiva (~10k sesiones) y compuerta de regresión sobre tasa de victoria. Nada se ajusta a ojo. | Pendiente — fase propia | Meta sano, prerrequisito de toda publicación |
+| **4 — Salas online** | Server autoritativo, WebSocket, salas, persistencia, deploy. | En pausa formal | El sueño comunitario en producción |
+| **5 — Auto-defensa del sitio** | El mismo motor supervisa la seguridad operativa de la arena (rate limiting, mitigación de bots) como segundo dominio real, en instancia y log separados. Modo sombra primero. + writeup "mismo motor, dos dominios". | Pendiente ([ADR 0005](adr/0005-adaptador-de-autodefensa-del-sitio.md)) | Argumento de arquitectura completo, demostrado en producción |
+| **6 — Núcleo en Rust** | Reescribir `packages/core` en Rust→WASM contra la misma suite del contrato. Cero cambios fuera del núcleo. | Opcional, sin apuro | Writeup: "mismo contrato, dos implementaciones" |
+
+Fases futuras exploratorias (ente móvil/activo, ML/embeddings, B2B, distribución en itch/Steam): viven en el embudo — [`roadmap-avanzado.md`](roadmap-avanzado.md) y [`crecimiento-y-difusion.md`](crecimiento-y-difusion.md) — y solo salen de ahí vía ADR.
 
 La Fase 5 fue redefinida por [ADR 0005](adr/0005-adaptador-de-autodefensa-del-sitio.md): el adaptador de logs/anomalías de juguete se reemplaza por la auto-defensa del sitio, con condiciones no negociables (instancia y log aislados, traducción por puertos, modo sombra antes que modo activo, frenos duros y kill-switch).
 
