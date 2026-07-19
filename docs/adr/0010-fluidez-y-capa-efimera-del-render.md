@@ -159,3 +159,43 @@ Requiere una acción del autor (grabar los trazos en su navegador); no se puede 
 **Sí matiza el ADR 0007**, sin reemplazarlo: su promesa de "el DOM y el export son idénticos" queda acotada a la **capa canónica**, y se declara explícitamente que existe una capa efímera fuera de esa garantía. Los puntos 1-6 del ADR 0007 siguen vigentes tal cual para todo lo que deriva del log. Si el autor prefiere, esto puede registrarse como enmienda al 0007 en vez de ADR propio; se propone separado porque introduce un concepto nuevo (la capa efímera) que va a gobernar también los contraataques y el telegraph.
 
 **El `CLAUDE.md` no requiere actualización.**
+
+---
+
+## Enmienda 1 — quién dibuja un evento que las dos capas pueden dibujar (2026-07-18)
+
+**Estado:** aceptada. Origen: revisión externa, respuesta al reporte de dirección de Fase 3b (P3).
+
+### El hueco
+
+El ADR original creó dos capas de render pero **no dijo quién representa un evento que ambas pueden dibujar**. En la práctica eso era un bug visible jugando: un ataque por gesto se dibujaba **dos veces** en vivo — el trazador efímero volando hacia el ente y, encima, el vector canónico de `ResistanceApplied` apareciendo de golpe con otra dirección.
+
+### La regla
+
+**Cada capa es dueña de un tramo de la historia del evento.**
+
+- La **efímera** es dueña del **viaje**. Solo existe en vivo.
+- La **canónica** es dueña del **impacto**. Existe siempre: en vivo y en replay.
+- **Nunca dos dueños del mismo tramo.**
+
+Es la misma regla que ya regía la puntería en el §3: la dirección le da forma al viaje, nunca al destino.
+
+### Implementación
+
+El vector de `ResistanceApplied` se parte en dos elementos con clases distintas: `incoming` (el viaje, la línea que cruza el lienzo) e `impact` (la cuña que penetra el borde del ente, con profundidad ∝ `eff`).
+
+La supresión del viaje ocurre **solo para los `seq` que la capa efímera materializa**, y viaja como opción explícita de render:
+
+```ts
+interface RenderOptions {
+  readonly ephemeralOwnedSeqs?: ReadonlySet<number>;
+}
+```
+
+- **El replay jamás la setea** y dibuja el vector completo, exactamente como antes. La capa efímera no se graba: si el replay también se callara el viaje, ese tramo no lo dibujaría nadie.
+- En la arena, `LiveView.claimEphemeral(log, corte)` reclama los eventos que entraron con un ataque por gesto. Los prefabs y las builds del Builder **no reclaman nada** — no tienen trazador, y ahí el vector canónico sigue siendo el único dueño.
+- Un `seq` reclamado queda reclamado mientras viva en la ventana de render, no mientras viva el trazador: devolver la propiedad al expirar el proyectil haría aparecer el vector canónico justo cuando el trazador se apaga, que es el mismo doble dibujo corrido medio segundo.
+
+### Por qué no rompe la pureza
+
+Mismas entradas → misma salida, byte a byte. La divergencia entre vivo y replay vive **declarada en las opciones**, no escondida en un `if` que mire si hay DOM. Es exactamente el mismo mecanismo por el que la arena usa su propio `theme` sin tocar el del export.

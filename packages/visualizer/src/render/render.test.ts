@@ -171,6 +171,85 @@ describe("R5 — la curva se ve como un ataque que se apaga", () => {
   });
 });
 
+// La enmienda P3 del ADR 0010. El bug que corrige era visible jugando: un
+// ataque por gesto se dibujaba DOS VECES en vivo —el trazador efímero volando
+// hacia el ente y, encima, el vector canónico apareciendo de golpe con otra
+// dirección—. La regla es "cada capa es dueña de un tramo": la efímera del
+// viaje, la canónica del impacto.
+describe("dueños de tramo — ephemeralOwnedSeqs", () => {
+  /** Los `seq` de los frames donde el motor atenuó algo. */
+  function seqsDeResistencia(frames: readonly Frame[]): readonly number[] {
+    return frames.filter((f) => f.event.type === "ResistanceApplied").map((f) => f.seq);
+  }
+
+  it("suprime el viaje de los seq que la capa efímera materializa", () => {
+    const frames = framesOf(...repeat(compuesta, 2));
+    const owned = new Set(seqsDeResistencia(frames));
+    expect(owned.size).toBeGreaterThan(0);
+
+    for (const out of renderFrames(frames, { ephemeralOwnedSeqs: owned })) {
+      expect(countOf(out, "incoming")).toBe(0);
+    }
+  });
+
+  // La otra mitad de la regla, y la que impide que la supresión se coma el
+  // evento entero: el destino siempre se dibuja.
+  it("dibuja el impacto igual en los seq cedidos", () => {
+    const frames = framesOf(...repeat(compuesta, 2));
+    const owned = new Set(seqsDeResistencia(frames));
+
+    const conImpacto = renderFrames(frames, { ephemeralOwnedSeqs: owned }).filter(
+      (out) => countOf(out, "impact") > 0,
+    );
+    expect(conImpacto.length).toBe(owned.size);
+  });
+
+  it("no toca los seq que la capa efímera no reclamó", () => {
+    const frames = framesOf(...repeat(compuesta, 2));
+    const seqs = seqsDeResistencia(frames);
+    // Se cede solo el primero: el segundo tiene que seguir dibujando el viaje.
+    const owned = new Set([seqs[0]!]);
+
+    const conViaje = renderFrames(frames, { ephemeralOwnedSeqs: owned }).filter(
+      (out) => countOf(out, "incoming") > 0,
+    );
+    expect(conViaje.length).toBe(seqs.length - 1);
+  });
+
+  // El punto no negociable: la capa efímera NO se graba, así que si el replay
+  // también se callara el viaje, ese tramo no lo dibujaría nadie nunca.
+  it("el replay sin opciones dibuja el viaje completo, como siempre", () => {
+    const frames = framesOf(...repeat(compuesta, 2));
+    const seqs = seqsDeResistencia(frames);
+
+    const conViaje = renderFrames(frames).filter((out) => countOf(out, "incoming") > 0);
+    expect(conViaje.length).toBe(seqs.length);
+  });
+
+  // La divergencia entre vivo y replay vive DECLARADA en las opciones: con las
+  // mismas opciones, el string sigue siendo el mismo byte a byte.
+  it("sigue siendo puro: mismas opciones, mismo SVG", () => {
+    const frames = framesOf(...repeat(compuesta, 2));
+    const owned = new Set(seqsDeResistencia(frames));
+    expect(renderFrames(frames, { ephemeralOwnedSeqs: owned })).toEqual(
+      renderFrames(frames, { ephemeralOwnedSeqs: new Set(owned) }),
+    );
+  });
+
+  it("hunde el impacto en proporción a eff", () => {
+    const frames = framesOf(...repeat(compuesta, requiredExposures(compuesta)));
+    // `x2` es la punta de la cuña. Con eff cayendo, la punta se va quedando
+    // cada vez más cerca de la superficie: la resistencia se ve como profundidad.
+    const puntas = renderFrames(frames)
+      .map((out) => attrOf(out, "impact", "x2"))
+      .filter((v): v is string => v !== undefined)
+      .map(Number);
+
+    expect(puntas.length).toBeGreaterThan(1);
+    expect(new Set(puntas).size).toBeGreaterThan(1);
+  });
+});
+
 describe("R1 — el salto se ve como un snap", () => {
   const n = requiredExposures(compuesta);
 

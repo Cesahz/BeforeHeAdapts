@@ -198,3 +198,71 @@ describe("continuidad del playhead al entrar eventos", () => {
     }
   });
 });
+
+// La enmienda P3 del ADR 0010, del lado de la arena. Los tests del renderizador
+// verifican la REGLA; estos verifican que la arena la aplique de verdad — que es
+// donde se escondió el bug la primera vez.
+describe("LiveView — propiedad del viaje (enmienda P3)", () => {
+  /** Avanza el playhead hasta el final para ver el último frame dibujado. */
+  function reproducirTodo(view: LiveView, container: { innerHTML: string }): string[] {
+    const dibujos: string[] = [];
+    for (let i = 0; i < view.denseLength + 2; i += 1) {
+      view.tick(i * FRAME_HOLD_MS);
+      dibujos.push(container.innerHTML);
+    }
+    return dibujos;
+  }
+
+  it("sin reclamos dibuja el vector entrante, como el replay", () => {
+    const container = stub();
+    const view = new LiveView(container);
+    view.sync(salaCon(2).log);
+    expect(reproducirTodo(view, container).some((d) => d.includes('class="incoming"'))).toBe(true);
+  });
+
+  it("un seq reclamado deja de dibujar su viaje pero conserva su impacto", () => {
+    const container = stub();
+    const view = new LiveView(container);
+    const room = salaCon(2);
+
+    view.claimEphemeral(room.log, -1);
+    view.sync(room.log);
+
+    const dibujos = reproducirTodo(view, container);
+    expect(dibujos.some((d) => d.includes('class="incoming"'))).toBe(false);
+    // Y el destino sigue estando: ceder el viaje no puede borrar el evento.
+    expect(dibujos.some((d) => d.includes('class="impact"'))).toBe(true);
+  });
+
+  it("reclama solo lo que entró después del corte", () => {
+    const room = new Room("test");
+    const cd = cooldownOf(compuesta);
+    room.attack(compuesta, 0);
+    const corte = room.log.events[room.log.events.length - 1]!.seq;
+    room.attack(compuesta, cd);
+
+    const view = new LiveView(stub());
+    view.claimEphemeral(room.log, corte);
+
+    for (const event of room.log.events) {
+      expect(view.ownedSeqs.has(event.seq)).toBe(event.seq > corte);
+    }
+  });
+
+  it("olvida los seq que se cayeron por el frente de la ventana", () => {
+    const view = new LiveView(stub());
+    const room = new Room("test");
+    const cd = cooldownOf(compuesta);
+
+    for (let i = 0; i < WINDOW + 20; i += 1) {
+      const corte = room.log.events[room.log.events.length - 1]?.seq ?? -1;
+      room.attack(compuesta, i * cd);
+      view.claimEphemeral(room.log, corte);
+      view.sync(room.log);
+    }
+
+    // Si no se podaran, el conjunto crecería con la sesión entera. Acota a la
+    // ventana, que es lo único que el render puede llegar a dibujar.
+    expect(view.ownedSeqs.size).toBeLessThanOrEqual(WINDOW);
+  });
+});

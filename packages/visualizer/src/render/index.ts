@@ -33,6 +33,26 @@ const TAU = Math.PI * 2;
 
 export interface RenderOptions {
   readonly theme?: Theme;
+  /**
+   * `seq` de los eventos cuyo VIAJE ya dibuja la capa efímera (ADR 0010,
+   * enmienda P3).
+   *
+   * Cada capa es dueña de un tramo de la historia del evento: la efímera es
+   * dueña del viaje —y solo existe en vivo—, la canónica es dueña del impacto
+   * —y existe siempre—. Nunca dos dueños del mismo tramo. Sin esto, un ataque
+   * por gesto se dibujaba dos veces en vivo: el trazador efímero volando hacia
+   * el ente y, encima, el vector canónico de `ResistanceApplied` apareciendo de
+   * golpe con otra dirección.
+   *
+   * Solo la arena en vivo lo setea. **El replay jamás lo pasa** y dibuja el
+   * vector completo, exactamente como hoy: la capa efímera no se grabó, así que
+   * si el replay también se lo callara nadie dibujaría ese tramo.
+   *
+   * La pureza queda intacta: mismas entradas → misma salida. La divergencia
+   * entre vivo y replay vive DECLARADA en las opciones, no escondida en un `if`
+   * que mire si hay DOM.
+   */
+  readonly ephemeralOwnedSeqs?: ReadonlySet<number>;
 }
 
 /**
@@ -45,8 +65,7 @@ export function renderFrames(
   frames: readonly Frame[],
   options: RenderOptions = {},
 ): readonly string[] {
-  const theme = options.theme ?? defaultTheme;
-  return Object.freeze(frames.map((_, i) => renderAt(frames, i, theme)));
+  return Object.freeze(frames.map((_, i) => renderAt(frames, i, options)));
 }
 
 /** Un frame de la secuencia. Ver `renderFrames` para por qué pide el arreglo. */
@@ -58,10 +77,11 @@ export function renderFrame(
   if (!Number.isInteger(index) || index < 0 || index >= frames.length) {
     throw new RangeError(`no hay frame en el índice ${index}`);
   }
-  return renderAt(frames, index, options.theme ?? defaultTheme);
+  return renderAt(frames, index, options);
 }
 
-function renderAt(frames: readonly Frame[], index: number, theme: Theme): string {
+function renderAt(frames: readonly Frame[], index: number, options: RenderOptions): string {
+  const theme = options.theme ?? defaultTheme;
   const frame = frames[index]!;
   const layout = layoutOf(frame, theme);
   const center = centerOf(theme);
@@ -86,7 +106,7 @@ function renderAt(frames: readonly Frame[], index: number, theme: Theme): string
         fill: theme.palette.background,
       }),
       ...threadLayer(layout, theme),
-      ...incomingLayer(frame.event, center, radius, theme),
+      ...incomingLayer(frame, center, radius, theme, options.ephemeralOwnedSeqs),
       shockwaveLayer(sinceSnap, center, radius, theme),
       coreLayer(frame, layout, center, radius, scale, theme),
       ...nodeLayer(layout, theme),
@@ -196,36 +216,71 @@ function threadLayer(layout: Layout, theme: Theme): readonly string[] {
 }
 
 /**
- * El vector entrante de R5, solo en los frames donde el motor atenuó algo.
+ * El ataque entrante de R5, solo en los frames donde el motor atenuó algo.
  *
  * La curva `eff(k)` no se muestra con números: se muestra con un ataque que
- * llega **más pálido y más flaco** en cada exposición. El valor sale del propio
- * evento (`effApplied`), no se recalcula.
+ * llega **más pálido y más flaco** en cada exposición, y que **penetra menos**
+ * cada vez. El valor sale del propio evento (`effApplied`), no se recalcula.
+ *
+ * Son DOS tramos con DOS dueños (ADR 0010, enmienda P3):
+ *
+ *   - el **viaje** —la línea que cruza el lienzo— lo cede esta capa cuando la
+ *     efímera ya lo está dibujando en vivo;
+ *   - el **impacto** —la mordida sobre el borde del ente— lo dibuja SIEMPRE
+ *     esta capa, en vivo y en replay.
+ *
+ * Es la misma regla que ya rige la puntería: la dirección le da forma al viaje,
+ * nunca al destino. El destino es el ente y lo cuenta el log.
  */
 function incomingLayer(
-  event: EngineEvent,
+  frame: Frame,
   center: Point,
   coreRadius: number,
   theme: Theme,
+  ephemeralOwnedSeqs: ReadonlySet<number> | undefined,
 ): readonly string[] {
+  const event = frame.event;
   if (event.type !== "ResistanceApplied") return [];
 
   const bearing = bearingOf(clusterKeyOf(event.signature));
-  const from = polar(center, theme.size, bearing);
-  const to = polar(center, coreRadius, bearing);
+  const eff = event.effApplied;
 
+  // El impacto: una cuña que entra en el ente desde el borde. Cuanto más
+  // adaptado está el cluster, menos hondo llega — la resistencia se VE como
+  // profundidad, que es lo que un número en un HUD nunca comunica.
+  const surface = polar(center, coreRadius, bearing);
+  const depth = polar(center, coreRadius * (1 - 0.45 * eff), bearing);
+  const impacto = [
+    el("line", {
+      class: "impact",
+      x1: surface.x,
+      y1: surface.y,
+      x2: depth.x,
+      y2: depth.y,
+      stroke: theme.palette.incoming,
+      "stroke-width": theme.incomingWidth * eff,
+      "stroke-opacity": eff,
+      "stroke-linecap": "round",
+    }),
+  ];
+
+  // El viaje, si esta capa sigue siendo su dueña.
+  if (ephemeralOwnedSeqs?.has(frame.seq) === true) return impacto;
+
+  const from = polar(center, theme.size, bearing);
   return [
     el("line", {
       class: "incoming",
       x1: from.x,
       y1: from.y,
-      x2: to.x,
-      y2: to.y,
+      x2: surface.x,
+      y2: surface.y,
       stroke: theme.palette.incoming,
-      "stroke-width": theme.incomingWidth * event.effApplied,
-      "stroke-opacity": event.effApplied,
+      "stroke-width": theme.incomingWidth * eff,
+      "stroke-opacity": eff,
       "stroke-linecap": "round",
     }),
+    ...impacto,
   ];
 }
 

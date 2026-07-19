@@ -210,6 +210,9 @@ attachPointer(escena, now, {
     cursor = aSvg(x, y);
   },
   onStroke: (points, t) => {
+    // El corte del log ANTES del intento: lo que entre a partir de acá es este
+    // ataque, y es lo que la capa efímera va a materializar como trazador.
+    const corte = room.log.events[room.log.events.length - 1]?.seq ?? -1;
     const attempt = session.attemptGesture(points, t);
     if (attempt.kind === "rejected") {
       // Un rechazo NO consume cooldown: el reconocedor no cobra sus errores.
@@ -257,6 +260,12 @@ attachPointer(escena, now, {
         bornAt: t,
       },
     ];
+
+    // Este ataque ya tiene su viaje dibujado por el trazador de arriba, así que
+    // la capa canónica cede ese tramo y se queda solo con el impacto (ADR 0010,
+    // enmienda P3). Los prefabs y las builds del Builder NO reclaman nada: no
+    // tienen trazador, y ahí el vector canónico sigue siendo el único dueño.
+    view.claimEphemeral(room.log, corte);
 
     view.sync(room.log);
   },

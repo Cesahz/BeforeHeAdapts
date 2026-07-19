@@ -72,6 +72,16 @@ export class LiveView {
   #lastSvg = "";
 
   /**
+   * `seq` cuyo VIAJE ya dibuja la capa efímera (ADR 0010, enmienda P3).
+   *
+   * Un `seq` reclamado queda reclamado mientras viva en la ventana, no mientras
+   * viva el trazador. Si la propiedad se devolviera al expirar el trazador, el
+   * vector canónico aparecería de golpe justo cuando el proyectil se apaga —
+   * el mismo doble dibujo, corrido medio segundo.
+   */
+  #owned = new Set<number>();
+
+  /**
    * @param container lo único que la vista necesita es dónde escribir el SVG.
    * Pedir `{ innerHTML }` en vez de `HTMLElement` no es abstracción por gusto:
    * es lo que permite testear la vista entera en Node, sin DOM.
@@ -99,6 +109,25 @@ export class LiveView {
   /** Índice del frame que se está mostrando. Expuesto para los tests de continuidad. */
   get playhead(): number {
     return this.#playhead;
+  }
+
+  /** `seq` cedidos a la capa efímera. Para los tests. */
+  get ownedSeqs(): ReadonlySet<number> {
+    return this.#owned;
+  }
+
+  /**
+   * La capa efímera reclama el viaje de los eventos que entraron con este
+   * ataque: son los que van a volar como trazador, así que el vector canónico
+   * deja de dibujarlos.
+   *
+   * Se llama ANTES de `sync`, con el log ya crecido: los eventos del ataque son
+   * los que el log sumó desde el corte que se le pasa.
+   */
+  claimEphemeral(log: EventLog, sinceSeq: number): void {
+    for (const event of log.events) {
+      if (event.seq > sinceSeq) this.#owned.add(event.seq);
+    }
   }
 
   /**
@@ -142,6 +171,16 @@ export class LiveView {
     const reubicado = this.#playhead - desplazamiento * DEFAULT_STEPS;
     this.#playhead = Math.min(Math.max(0, reubicado), Math.max(0, this.#dense.length - 1));
 
+    // Los `seq` que se cayeron por el frente de la ventana ya no se dibujan
+    // nunca más, así que su propiedad no le importa a nadie: se olvidan para que
+    // el conjunto no crezca con la sesión.
+    const primero = cola[0]?.seq;
+    if (primero !== undefined) {
+      for (const seq of this.#owned) {
+        if (seq < primero) this.#owned.delete(seq);
+      }
+    }
+
     this.#lastSyncMs = performance.now() - t0;
   }
 
@@ -182,7 +221,13 @@ export class LiveView {
     const end = this.#playhead + 1;
     const start = Math.max(0, end - WINDOW * DEFAULT_STEPS);
     const ventana = this.#dense.slice(start, end);
-    const svg = renderFrame(ventana, ventana.length - 1, this.render);
+    // Las opciones se componen acá y no en el constructor: el conjunto de
+    // `seq` cedidos cambia con cada ataque, y el render tiene que verlo como
+    // dato de entrada explícito, no como estado que consulta por su cuenta.
+    const svg = renderFrame(ventana, ventana.length - 1, {
+      ...this.render,
+      ephemeralOwnedSeqs: this.#owned,
+    });
 
     // Escribir el DOM solo cuando el dibujo cambió: entre dos cuadros idénticos
     // no hay nada que actualizar, y el SVG es determinista byte a byte, así que
