@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --build && vite build",
     "preview": "vite preview",
+    "render:evolucion": "node scripts/evolucion.ts",
     "typecheck": "tsc --build",
     "test": "vitest run",
     "test:watch": "vitest"

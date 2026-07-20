@@ -32,6 +32,7 @@ docs/privado/
 
 # --- Renders del visualizador  ---
 packages/visualizer/renders/
+apps/web/renders/
 
 # --- Sistema operativo / editor ---
 .DS_Store
