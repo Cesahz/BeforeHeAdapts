@@ -179,7 +179,7 @@ function player(svgs: readonly string[], durations: readonly number[]): string {
 <div class="bar">
   <label>velocidad <input type="range" id="vel" min="0.25" max="6" step="0.25" value="1" style="max-width:160px"></label>
   <span id="velTxt">1×</span>
-  <button id="rec">● grabar webm</button>
+  <button id="rec" title="graba en tiempo real: tarda lo que dura el replay">● grabar webm</button>
   <span id="recEstado"></span>
 </div>
 <script type="module">
@@ -229,6 +229,8 @@ requestAnimationFrame(bucle);
 const rec = document.getElementById("rec");
 const recEstado = document.getElementById("recEstado");
 
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
 function rasterizar(svg, size) {
   return new Promise((ok, mal) => {
     const img = new Image();
@@ -254,16 +256,38 @@ rec.onclick = async () => {
   grabador.ondataavailable = (e) => { if (e.data.size > 0) trozos.push(e.data); };
   grabador.start();
 
+  // La grabación transcurre en TIEMPO REAL, y no es un detalle de comodidad.
+  //
+  // \`captureStream(0)\` sella cada cuadro con el reloj de pared en el instante
+  // del \`requestFrame()\`. Empujar de una los N cuadros que un frame debe durar
+  // —que es lo que hacía la primera versión— produce N cuadros con casi el mismo
+  // timestamp: el webm terminaba durando lo que tardó el rasterizado, no lo que
+  // dice el guion temporal, y salía acelerado. El único modo de que un cuadro
+  // "dure" es que pase ese tiempo de verdad entre un \`requestFrame()\` y el
+  // siguiente. Así que grabar 55 s de replay toma 55 s: es el costo del método.
+  const intervalo = 1000 / fps;
+  const velocidad = Number(vel.value);
+  const totalMs = durations.reduce((a, b) => a + b, 0);
+  let consumido = 0;
+
   for (let n = 0; n < svgs.length; n++) {
     const img = await rasterizar(svgs[n], size);
     ctx.clearRect(0, 0, size, size);
     ctx.drawImage(img, 0, 0, size, size);
-    // Un cuadro por cada 1/fps que el frame debe durar: así el webm respeta el
-    // guion temporal en vez de correr todo a velocidad de rasterizado.
-    const cuadros = Math.max(1, Math.round((durations[n] / 1000) * fps));
-    for (let c = 0; c < cuadros; c++) track.requestFrame();
     pintar(n);
-    recEstado.textContent = \`grabando \${n + 1}/\${svgs.length}\`;
+
+    // El slider de velocidad vale también acá: se lee UNA vez al empezar, para
+    // que mover el control a mitad de la grabación no deforme el resultado.
+    const objetivo = durations[n] / velocidad;
+    const finaliza = performance.now() + objetivo;
+    do {
+      track.requestFrame();
+      await esperar(Math.min(intervalo, Math.max(0, finaliza - performance.now())));
+    } while (performance.now() < finaliza);
+
+    consumido += durations[n];
+    const faltan = Math.ceil((totalMs - consumido) / velocidad / 1000);
+    recEstado.textContent = \`grabando \${n + 1}/\${svgs.length} · faltan \${faltan} s\`;
   }
 
   grabador.stop();
