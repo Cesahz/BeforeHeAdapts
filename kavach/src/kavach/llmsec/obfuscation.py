@@ -117,8 +117,24 @@ def try_rot13(text: str) -> str | None:
     return None
 
 
+def _without_base64_runs(text: str) -> str:
+    """saca los tramos base64 del texto.
+
+    hace falta porque un tramo base64 es ruido para las otras heuristicas: mezcla
+    letras y digitos (dispara leetspeak) y su distribucion de vocales enganya al
+    detector de rot13. sin esto, un solo prompt en base64 reportaba tres tecnicas
+    en vez de una -informacion falsa en el explain y primitivas de mas que
+    diluyen la firma justo cuando se la quiere comparar con la version en claro-.
+    """
+    return _BASE64_RUN.sub(" ", text)
+
+
 def techniques(text: str) -> list[str]:
-    """tecnicas de ofuscacion detectadas, en orden estable."""
+    """tecnicas de ofuscacion detectadas, en orden estable.
+
+    las heuristicas debiles (leetspeak, rot13) corren sobre el texto **sin los
+    tramos base64**, para no acumular falsos positivos sobre el mismo payload.
+    """
     found: list[str] = []
     if any(char in text for char in _ZERO_WIDTH):
         found.append("zero-width")
@@ -126,11 +142,15 @@ def techniques(text: str) -> list[str]:
         found.append("homoglyph")
     if _SPACED_LETTERS.search(text):
         found.append("spacing")
-    if try_base64(text):
+
+    has_base64 = bool(try_base64(text))
+    if has_base64:
         found.append("base64")
-    if try_rot13(text) is not None:
+
+    residual = _without_base64_runs(text) if has_base64 else text
+    if try_rot13(residual) is not None:
         found.append("rot13")
-    if _LEET_WORD.search(text) and unleet(text) != text:
+    if _LEET_WORD.search(residual) and unleet(residual) != residual:
         found.append("leetspeak")
     return found
 
@@ -150,7 +170,9 @@ def unmask(text: str) -> tuple[str, list[str]]:
     cleaned = unleet(cleaned)
 
     extra = try_base64(text)
-    rot = try_rot13(text)
+    #mismo criterio que en `techniques`: rot13 no se prueba sobre lo que ya se
+    #decodifico como base64.
+    rot = try_rot13(_without_base64_runs(text) if extra else text)
     if rot is not None:
         extra.append(rot)
 

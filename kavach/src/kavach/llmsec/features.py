@@ -15,10 +15,9 @@ pueda filtrarse texto del usuario -conceptos, clases de ataque, tecnicas de
 ofuscacion y tramos son todos enumeraciones definidas en el codigo-. en http la
 plantilla de ruta si arrastra segmentos literales; aca no queda nada.
 
-nota de dependencia: `entropy_bucket` se reusa de `security/features.py` en vez
-de reimplementarse. es matematica de texto pura y no tiene nada de http, pero
-crea un acoplamiento entre dos dominios hermanos que conviene resolver
-extrayendola a un modulo compartido. queda anotado para ADR.
+las medidas de texto compartidas (entropia) viven en `kavach/text_utils.py`, no
+en el dominio http: no pertenecen a ninguno de los dos y tenerlas en uno creaba
+un acoplamiento silencioso entre dominios hermanos. ver ADR 004.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from ..security.features import entropy_bucket, shannon_entropy
+from ..text_utils import ENTROPY_BUCKETS, entropy_bucket, shannon_entropy
 from .lexicon import CONCEPTS, concepts_in
 from .obfuscation import fold_homoglyphs, strip_zero_width, unmask
 
@@ -320,7 +319,7 @@ CLOSED_VOCABULARY: dict[str, frozenset[str]] = {
     "concept": CONCEPTS,
     "len": frozenset({"tiny", "short", "medium", "long", "huge"}),
     "density": frozenset({"low", "medium", "high", "extreme"}),
-    "entropy": frozenset({"low", "medium", "high", "extreme"}),
+    "entropy": ENTROPY_BUCKETS,
     "resp": RESPONSE_CLASSES,
     "obf": frozenset({"zero-width", "homoglyph", "spacing", "base64", "rot13", "leetspeak"}),
 }

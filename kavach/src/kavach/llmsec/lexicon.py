@@ -167,10 +167,20 @@ CONCEPTS: frozenset[str] = frozenset(_CONCEPT_PATTERNS)
 def concepts_in(text: str) -> list[str]:
     """conceptos presentes en el texto, en orden de primera aparicion.
 
-    el orden es por posicion en el texto, no por el orden del diccionario: dos
-    prompts con los mismos conceptos en distinto orden describen movimientos
-    distintos (pedir y despues justificar no es lo mismo que al reves) y el
-    esqueleto tiene que poder distinguirlos.
+    el orden es por posicion en el texto y no por el orden del diccionario, para
+    que el esqueleto sea reproducible y legible en el explain.
+
+    cuanto pesa ese orden, medido y dicho de frente: **poco, a proposito**. el
+    esqueleto ordenado es una sola primitiva de once, asi que dos prompts con los
+    mismos conceptos en secuencia invertida quedan a 0.83 de similitud -casi
+    identicos-. es el comportamiento correcto para este dominio: reordenar
+    clausulas es justamente la mutacion barata que un atacante prueba primero, y
+    tratarla como un patron nuevo le regalaria exposiciones. el orden queda
+    registrado para identidad y auditoria, no como discriminador fuerte.
+
+    el caso donde el orden si es decisivo -una escalada progresiva- es
+    multi-turno y no se resuelve aca: vive en el traductor, que tiene estado de
+    sesion. ver la limitacion declarada en `features.classify_attack`.
     """
     if not text:
         return []
