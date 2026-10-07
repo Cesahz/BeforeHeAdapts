@@ -8,6 +8,10 @@ El problema conceptual está inspirado en la mecánica de adaptación de un anta
 
 El dominio vitrina es una arena web donde se ataca al ente componiendo ataques con un DSL. El motor no depende de ella: es un adaptador más.
 
+## Alcance
+
+Este repositorio es un **prototipo**: un modelo funcional y una representación visual de la idea que quiero construir. El objetivo final es considerablemente más complejo. Acá valido el núcleo (el contrato, la adaptación y el log de eventos) sobre un dominio acotado, la arena, para comprobar que las reglas se sostienen antes de escalarlas.
+
 ## El contrato
 
 Seis reglas. Están escritas como tests ejecutables en `packages/core/src/contract.test.ts`, que es la especificación real del proyecto — el código existe para ponerlas en verde.
